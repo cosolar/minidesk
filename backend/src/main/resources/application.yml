@@ -1,0 +1,60 @@
+server:
+  port: 18080
+  shutdown: graceful
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 24MB
+  application:
+    name: minidesk
+  datasource:
+    url: jdbc:sqlite:./data/minidesk.db
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      maximum-pool-size: 8
+      connection-init-sql: PRAGMA journal_mode=WAL;
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-sqlite.sql
+      continue-on-error: false
+  cache:
+    type: caffeine
+    caffeine:
+      spec: maximumSize=500,expireAfterWrite=600s
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  type-handlers-package: cn.minims.desk.framework.mybatis.handler
+  global-config:
+    banner: false
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+sa-token:
+  token-name: MiniDesk-Token
+  timeout: 2592000
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false
+  token-style: jwt
+  is-read-header: true
+  is-read-cookie: false
+  jwt-secret-key: ${SA_TOKEN_SECRET:minidesk-dev-secret-please-override-in-prod}
+
+minidesk:
+  data-dir: ./data
+  register:
+    # 公网部署时设置该环境变量，首个管理员注册需填写
+    claim-token: ${MINIDESK_CLAIM_TOKEN:}
+
+logging:
+  level:
+    cn.minims.desk: debug

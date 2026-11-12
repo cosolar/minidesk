@@ -1,0 +1,9 @@
+# 后端独立构建 / 运行产物
+target/
+data/*
+!data/.gitkeep
+logs/
+*.log
+*.db
+*.db-shm
+*.db-wal

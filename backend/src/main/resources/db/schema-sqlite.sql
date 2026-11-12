@@ -1,0 +1,918 @@
+-- MiniDesk schema (SQLite) — generated from docs/数据库设计.md
+-- 幂等：全部 IF NOT EXISTS，可重复启动
+-- 字段增量由 SchemaUpgrade 处理（ALTER 不放在这里，避免重复执行报错）
+
+CREATE TABLE IF NOT EXISTS sys_user (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  username           VARCHAR(64)  NOT NULL,
+  password_hash      VARCHAR(100) NOT NULL,
+  nickname           VARCHAR(64)  NOT NULL DEFAULT '朋友',
+  email              VARCHAR(128),
+  avatar_file_id     BIGINT,
+  status             TINYINT      NOT NULL DEFAULT 1,   -- 1正常 0禁用
+  source             VARCHAR(16)  NOT NULL DEFAULT 'admin', -- self 自助注册 / admin 后台创建 / init 命令行
+  pwd_reset_required TINYINT      NOT NULL DEFAULT 0,   -- 管理员重置后强制改密
+  login_count        INTEGER      NOT NULL DEFAULT 0,
+  last_login_at      DATETIME,
+  last_login_ip      VARCHAR(64),
+  remark             VARCHAR(255),
+  created_at         DATETIME     NOT NULL,
+  updated_at         DATETIME     NOT NULL,
+  deleted            TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_user_username ON sys_user(username);
+
+CREATE TABLE IF NOT EXISTS sys_role (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  code       VARCHAR(32)  NOT NULL,              -- ADMIN / MEMBER
+  name       VARCHAR(64)  NOT NULL,
+  built_in   TINYINT      NOT NULL DEFAULT 0,    -- 内置角色不可删
+  remark     VARCHAR(255),
+  created_at DATETIME     NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_role_code ON sys_role(code);
+
+CREATE TABLE IF NOT EXISTS sys_user_role (
+  id      INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id BIGINT NOT NULL,
+  role_id BIGINT NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_user_role ON sys_user_role(user_id, role_id);
+
+CREATE INDEX IF NOT EXISTS idx_userrole_role ON sys_user_role(role_id);
+
+CREATE TABLE IF NOT EXISTS sys_role_permission (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  role_id         BIGINT      NOT NULL,
+  permission_code VARCHAR(64) NOT NULL           -- work:project:add；ADMIN 存 '*'
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_role_perm ON sys_role_permission(role_id, permission_code);
+
+CREATE TABLE IF NOT EXISTS sys_user_setting (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id          BIGINT       NOT NULL,
+  theme            VARCHAR(16)  NOT NULL DEFAULT 'auto',
+  sidebar_collapsed TINYINT     NOT NULL DEFAULT 0,
+  city             VARCHAR(64)  NOT NULL DEFAULT '北京',
+  week_start       TINYINT      NOT NULL DEFAULT 1,
+  dashboard_layout TEXT,
+  created_at       DATETIME     NOT NULL,
+  updated_at       DATETIME     NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_setting_user ON sys_user_setting(user_id);
+
+CREATE TABLE IF NOT EXISTS integration_config (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id         BIGINT       NOT NULL,
+  provider        VARCHAR(32)  NOT NULL,          -- qweather / minidocs
+  api_key_cipher  TEXT,                            -- AES-256-GCM
+  api_host        VARCHAR(255),
+  extra_json      TEXT,
+  enabled         TINYINT      NOT NULL DEFAULT 0,
+  created_at      DATETIME     NOT NULL,
+  updated_at      DATETIME     NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_integration ON integration_config(user_id, provider);
+
+CREATE TABLE IF NOT EXISTS sys_file (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  name        VARCHAR(255) NOT NULL,
+  path        VARCHAR(500) NOT NULL,
+  thumb_path  VARCHAR(500),
+  size        BIGINT       NOT NULL DEFAULT 0,
+  mime        VARCHAR(100),
+  hash        VARCHAR(32),
+  biz_type    VARCHAR(32),                         -- avatar/life_log/note/profile/trip
+  biz_id      BIGINT,
+  created_at  DATETIME     NOT NULL,
+  deleted     TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_file_user_biz ON sys_file(user_id, biz_type, biz_id);
+
+CREATE INDEX IF NOT EXISTS idx_file_hash ON sys_file(user_id, hash);
+
+CREATE TABLE IF NOT EXISTS sys_tag (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  name       VARCHAR(32) NOT NULL,
+  color      VARCHAR(16),
+  created_at DATETIME    NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_tag_name ON sys_tag(user_id, name);
+
+CREATE TABLE IF NOT EXISTS sys_tag_rel (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  tag_id     BIGINT      NOT NULL,
+  biz_type   VARCHAR(32) NOT NULL,
+  biz_id     BIGINT      NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_tag_rel ON sys_tag_rel(tag_id, biz_type, biz_id);
+
+CREATE INDEX IF NOT EXISTS idx_tag_rel_biz ON sys_tag_rel(biz_type, biz_id);
+
+CREATE TABLE IF NOT EXISTS sys_favorite (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  biz_type   VARCHAR(32) NOT NULL,
+  biz_id     BIGINT      NOT NULL,
+  created_at DATETIME    NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_favorite ON sys_favorite(user_id, biz_type, biz_id);
+
+CREATE TABLE IF NOT EXISTS app_entry (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  scope      VARCHAR(16) NOT NULL,                 -- quick/work/study/life
+  code       VARCHAR(64) NOT NULL,
+  name       VARCHAR(64) NOT NULL,
+  icon       VARCHAR(64),
+  color      VARCHAR(16),
+  route      VARCHAR(128),
+  sort_order INTEGER     NOT NULL DEFAULT 0,
+  visible    TINYINT     NOT NULL DEFAULT 1
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_app_entry ON app_entry(user_id, scope, code);
+
+CREATE TABLE IF NOT EXISTS notification (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  type       VARCHAR(32) NOT NULL,                 -- reminder/review/backup/expire
+  title      VARCHAR(200) NOT NULL,
+  content    VARCHAR(500),
+  biz_type   VARCHAR(32),
+  biz_id     BIGINT,
+  read_flag  TINYINT     NOT NULL DEFAULT 0,
+  created_at DATETIME    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_notify_user ON notification(user_id, read_flag, created_at);
+
+CREATE TABLE IF NOT EXISTS job_exec_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_name    VARCHAR(64) NOT NULL,
+  started_at  DATETIME    NOT NULL,
+  finished_at DATETIME,
+  success     TINYINT     NOT NULL DEFAULT 1,
+  cost_ms     BIGINT,
+  error_msg   VARCHAR(1000),
+  trigger_by  VARCHAR(16) DEFAULT 'cron'           -- cron/manual
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_log ON job_exec_log(job_name, started_at);
+
+CREATE TABLE IF NOT EXISTS backup_record (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  file_name  VARCHAR(255) NOT NULL,
+  size       BIGINT       NOT NULL,
+  encrypted  TINYINT      NOT NULL DEFAULT 1,
+  status     VARCHAR(16)  NOT NULL DEFAULT 'success',
+  remark     VARCHAR(255),
+  created_at DATETIME     NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sys_config (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  config_key   VARCHAR(64)  NOT NULL,
+  config_value VARCHAR(500) NOT NULL,
+  remark       VARCHAR(255),
+  updated_at   DATETIME     NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_config_key ON sys_config(config_key);
+
+CREATE TABLE IF NOT EXISTS sys_login_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT,
+  username   VARCHAR(64)  NOT NULL,
+  success    TINYINT      NOT NULL,
+  fail_reason VARCHAR(100),
+  ip         VARCHAR(64),
+  user_agent VARCHAR(500),
+  created_at DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_loginlog_user ON sys_login_log(username, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_loginlog_time ON sys_login_log(created_at);
+
+CREATE TABLE IF NOT EXISTS sys_oper_log (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  username    VARCHAR(64)  NOT NULL,
+  module      VARCHAR(32)  NOT NULL,             -- console-user / console-role / backup ...
+  action      VARCHAR(32)  NOT NULL,             -- create/update/delete/disable/reset-password
+  target_type VARCHAR(32),
+  target_id   VARCHAR(64),
+  params      VARCHAR(2000),                     -- 参数摘要，已脱敏
+  result      VARCHAR(16)  NOT NULL DEFAULT 'success',
+  error_msg   VARCHAR(500),
+  ip          VARCHAR(64),
+  user_agent  VARCHAR(500),
+  cost_ms     INTEGER,
+  trace_id    VARCHAR(64),
+  created_at  DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_operlog_user ON sys_oper_log(user_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_operlog_time ON sys_oper_log(created_at);
+
+CREATE TABLE IF NOT EXISTS project_group (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  name       VARCHAR(64) NOT NULL,
+  color      VARCHAR(16),
+  sort_order INTEGER     NOT NULL DEFAULT 0,
+  created_at DATETIME    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pgroup_user ON project_group(user_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS project (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        BIGINT       NOT NULL,
+  group_id       BIGINT,
+  name           VARCHAR(120) NOT NULL,
+  description    TEXT,
+  color          VARCHAR(16)  DEFAULT '#4A86E8',
+  status         VARCHAR(16)  NOT NULL DEFAULT 'doing',  -- planning/doing/paused/done/archived
+  priority       TINYINT      NOT NULL DEFAULT 2,
+  start_date     DATE,
+  end_date       DATE,
+  progress_cache TINYINT      NOT NULL DEFAULT 0,
+  sort_order     INTEGER      NOT NULL DEFAULT 0,
+  created_at     DATETIME     NOT NULL,
+  updated_at     DATETIME     NOT NULL,
+  deleted        TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_project_user ON project(user_id, status, sort_order);
+
+CREATE TABLE IF NOT EXISTS task (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id          BIGINT       NOT NULL,
+  module           VARCHAR(16)  NOT NULL DEFAULT 'work',  -- work/study/life
+  task_type        VARCHAR(16)  NOT NULL DEFAULT 'todo',  -- todo/study/daily/followup
+  title            VARCHAR(200) NOT NULL,
+  note             TEXT,
+  priority         TINYINT      NOT NULL DEFAULT 2,       -- 1高 2中 3低
+  status           VARCHAR(16)  NOT NULL DEFAULT 'todo',  -- todo/doing/done/cancelled
+  due_date         DATE,
+  due_time         VARCHAR(8),                            -- 'HH:mm'，便于聚合排序
+  start_date       DATE,                                  -- 开始日期（开发任务工期）
+  start_time       VARCHAR(8),                            -- 'HH:mm'，开始时间
+  remind_at        DATETIME,
+  repeat_rule      VARCHAR(255),                          -- iCal RRULE
+  series_id        BIGINT,                                -- 重复实例指向母任务
+  project_id       BIGINT,
+  plan_id          BIGINT,
+  parent_id        BIGINT,                                -- 子任务
+  ref_type         VARCHAR(32),
+  ref_id           BIGINT,
+  tags             VARCHAR(255),
+  estimate_minutes INTEGER,
+  sort_order       INTEGER      NOT NULL DEFAULT 0,
+  done_at          DATETIME,
+  created_at       DATETIME     NOT NULL,
+  updated_at       DATETIME     NOT NULL,
+  deleted          TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_today   ON task(user_id, status, due_date);
+
+CREATE INDEX IF NOT EXISTS idx_task_project ON task(user_id, project_id, sort_order);
+
+CREATE INDEX IF NOT EXISTS idx_task_plan    ON task(user_id, plan_id);
+
+CREATE INDEX IF NOT EXISTS idx_task_done    ON task(user_id, module, done_at);
+
+CREATE INDEX IF NOT EXISTS idx_task_series  ON task(series_id);
+
+CREATE TABLE IF NOT EXISTS calendar_event (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  title       VARCHAR(200) NOT NULL,
+  description TEXT,
+  start_time  DATETIME     NOT NULL,
+  end_time    DATETIME,
+  all_day     TINYINT      NOT NULL DEFAULT 0,
+  location    VARCHAR(200),
+  color       VARCHAR(16)  DEFAULT '#35C79B',
+  source      VARCHAR(16)  NOT NULL DEFAULT 'manual',  -- manual/meeting
+  source_id   BIGINT,
+  created_at  DATETIME     NOT NULL,
+  updated_at  DATETIME     NOT NULL,
+  deleted     TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_time ON calendar_event(user_id, start_time);
+
+CREATE TABLE IF NOT EXISTS meeting (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT       NOT NULL,
+  title        VARCHAR(200) NOT NULL,
+  meeting_date DATE         NOT NULL,
+  start_time   VARCHAR(8),
+  end_time     VARCHAR(8),
+  location     VARCHAR(200),
+  host         VARCHAR(64),
+  content      TEXT,                                    -- Markdown（Vditor）
+  project_id   BIGINT,
+  created_at   DATETIME     NOT NULL,
+  updated_at   DATETIME     NOT NULL,
+  deleted      TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_date ON meeting(user_id, meeting_date);
+
+CREATE TABLE IF NOT EXISTS meeting_attendee (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  meeting_id BIGINT      NOT NULL,
+  name       VARCHAR(64) NOT NULL,
+  role       VARCHAR(32),
+  contact_id BIGINT
+);
+
+CREATE INDEX IF NOT EXISTS idx_attendee_meeting ON meeting_attendee(meeting_id);
+
+CREATE TABLE IF NOT EXISTS meeting_action (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT       NOT NULL,
+  meeting_id BIGINT       NOT NULL,
+  content    VARCHAR(500) NOT NULL,
+  owner      VARCHAR(64),
+  due_date   DATE,
+  task_id    BIGINT,
+  status     VARCHAR(16)  NOT NULL DEFAULT 'open'       -- open/done
+);
+
+CREATE INDEX IF NOT EXISTS idx_action_meeting ON meeting_action(meeting_id);
+
+CREATE TABLE IF NOT EXISTS goal (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT       NOT NULL,
+  module       VARCHAR(16)  NOT NULL DEFAULT 'work',
+  period_type  VARCHAR(16)  NOT NULL,                   -- month/quarter/year
+  period_key   VARCHAR(16)  NOT NULL,                   -- 2026-11 / 2026-Q4 / 2026
+  title        VARCHAR(200) NOT NULL,
+  description  TEXT,
+  target_value DECIMAL,
+  current_value DECIMAL    NOT NULL DEFAULT 0,
+  unit         VARCHAR(16),
+  progress     TINYINT      NOT NULL DEFAULT 0,
+  status       VARCHAR(16)  NOT NULL DEFAULT 'doing',
+  created_at   DATETIME     NOT NULL,
+  updated_at   DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_period ON goal(user_id, module, period_key);
+
+CREATE TABLE IF NOT EXISTS contact (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        BIGINT       NOT NULL,
+  name           VARCHAR(64)  NOT NULL,
+  type           VARCHAR(16)  NOT NULL DEFAULT 'client', -- client/colleague/partner/family
+  company        VARCHAR(128),
+  position       VARCHAR(64),
+  phone          VARCHAR(32),
+  email          VARCHAR(128),
+  wechat         VARCHAR(64),
+  birthday       DATE,
+  note           TEXT,
+  avatar_file_id BIGINT,
+  created_at     DATETIME     NOT NULL,
+  deleted        TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_contact_type ON contact(user_id, type);
+
+CREATE TABLE IF NOT EXISTS review (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        BIGINT      NOT NULL,
+  module         VARCHAR(16) NOT NULL,                  -- work/study/life
+  review_type    VARCHAR(16) NOT NULL,                  -- daily/weekly/monthly
+  review_date    DATE        NOT NULL,
+  summary        TEXT,
+  highlights     TEXT,
+  issues         TEXT,
+  next_plan      TEXT,
+  stats_json     TEXT,                                  -- 统计快照，不重算
+  auto_generated TINYINT     NOT NULL DEFAULT 0,
+  created_at     DATETIME    NOT NULL,
+  updated_at     DATETIME    NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_review ON review(user_id, module, review_type, review_date);
+
+CREATE TABLE IF NOT EXISTS study_plan (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        BIGINT       NOT NULL,
+  level          TINYINT      NOT NULL,                 -- 1年 2月 3周
+  parent_id      BIGINT,
+  title          VARCHAR(200) NOT NULL,
+  target_hours   DECIMAL      NOT NULL DEFAULT 0,
+  done_hours_cache DECIMAL    NOT NULL DEFAULT 0,
+  start_date     DATE,
+  end_date       DATE,
+  status         VARCHAR(16)  NOT NULL DEFAULT 'doing',
+  sort_order     INTEGER      NOT NULL DEFAULT 0,
+  created_at     DATETIME     NOT NULL,
+  updated_at     DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_plan_tree ON study_plan(user_id, level, parent_id);
+
+CREATE TABLE IF NOT EXISTS study_record (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  subject    VARCHAR(100) NOT NULL,
+  minutes    INTEGER     NOT NULL,
+  study_date DATE        NOT NULL,
+  plan_id    BIGINT,
+  note       VARCHAR(500),
+  created_at DATETIME    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_study_date ON study_record(user_id, study_date);
+
+CREATE TABLE IF NOT EXISTS course (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  name          VARCHAR(200) NOT NULL,
+  category      VARCHAR(64),
+  total_lessons INTEGER      NOT NULL DEFAULT 0,
+  done_lessons  INTEGER      NOT NULL DEFAULT 0,
+  cover_file_id BIGINT,
+  status        VARCHAR(16)  NOT NULL DEFAULT 'doing',
+  start_date    DATE,
+  note          TEXT,
+  created_at    DATETIME     NOT NULL,
+  updated_at    DATETIME     NOT NULL,
+  deleted       TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_user ON course(user_id, status);
+
+CREATE TABLE IF NOT EXISTS course_lesson (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT       NOT NULL,
+  course_id    BIGINT       NOT NULL,
+  title        VARCHAR(200) NOT NULL,
+  sort_order   INTEGER      NOT NULL DEFAULT 0,
+  duration_min INTEGER,
+  done         TINYINT      NOT NULL DEFAULT 0,
+  done_at      DATETIME,
+  note         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_lesson_course ON course_lesson(course_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS book (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  title         VARCHAR(200) NOT NULL,
+  author        VARCHAR(120),
+  category      VARCHAR(64),
+  total_pages   INTEGER,
+  read_pages    INTEGER      NOT NULL DEFAULT 0,
+  status        VARCHAR(16)  NOT NULL DEFAULT 'wish',   -- wish/reading/done
+  start_date    DATE,
+  finish_date   DATE,
+  rating        TINYINT,
+  cover_file_id BIGINT,
+  created_at    DATETIME     NOT NULL,
+  updated_at    DATETIME     NOT NULL,
+  deleted       TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_book_status ON book(user_id, status);
+
+CREATE TABLE IF NOT EXISTS book_note (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT   NOT NULL,
+  book_id    BIGINT   NOT NULL,
+  content    TEXT,                                      -- Markdown
+  page_no    INTEGER,
+  created_at DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_booknote_book ON book_note(book_id);
+
+CREATE TABLE IF NOT EXISTS exam (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT       NOT NULL,
+  name       VARCHAR(200) NOT NULL,
+  exam_date  DATE,
+  category   VARCHAR(64),
+  status     VARCHAR(16)  NOT NULL DEFAULT 'planning',
+  note       TEXT,
+  created_at DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_exam_date ON exam(user_id, exam_date);
+
+CREATE TABLE IF NOT EXISTS exam_question (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT  NOT NULL,
+  exam_id     BIGINT,
+  subject     VARCHAR(64),
+  content     TEXT    NOT NULL,
+  answer      TEXT,
+  analysis    TEXT,
+  wrong_count INTEGER NOT NULL DEFAULT 1,
+  mastered    TINYINT NOT NULL DEFAULT 0,
+  created_at  DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_question_exam ON exam_question(user_id, exam_id, mastered);
+
+CREATE TABLE IF NOT EXISTS skill (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT       NOT NULL,
+  name         VARCHAR(100) NOT NULL,
+  category     VARCHAR(64),
+  level        TINYINT      NOT NULL DEFAULT 1,         -- 1-5
+  target_level TINYINT      NOT NULL DEFAULT 5,
+  progress     TINYINT      NOT NULL DEFAULT 0,
+  note         TEXT,
+  created_at   DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_skill_user ON skill(user_id, category);
+
+CREATE TABLE IF NOT EXISTS skill_log (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT   NOT NULL,
+  skill_id     BIGINT   NOT NULL,
+  log_date     DATE     NOT NULL,
+  content      TEXT,
+  level_before TINYINT,
+  level_after  TINYINT,
+  created_at   DATETIME NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_skilllog ON skill_log(skill_id, log_date);
+
+CREATE TABLE IF NOT EXISTS ledger_category (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT      NOT NULL,
+  type       VARCHAR(8)  NOT NULL,                      -- income/expense
+  name       VARCHAR(32) NOT NULL,
+  icon       VARCHAR(64),
+  color      VARCHAR(16),
+  sort_order INTEGER     NOT NULL DEFAULT 0,
+  is_system  TINYINT     NOT NULL DEFAULT 0
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_ledger_cat ON ledger_category(user_id, type, name);
+
+CREATE TABLE IF NOT EXISTS ledger (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT      NOT NULL,
+  type         VARCHAR(8)  NOT NULL,
+  amount_cents BIGINT      NOT NULL,                    -- 金额：分
+  category_id  BIGINT,
+  account_id   BIGINT,
+  remark       VARCHAR(200),
+  occur_date   DATE        NOT NULL,
+  tags         VARCHAR(255),
+  created_at   DATETIME    NOT NULL,
+  updated_at   DATETIME    NOT NULL,
+  deleted      TINYINT     NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_ledger_date ON ledger(user_id, occur_date);
+
+CREATE INDEX IF NOT EXISTS idx_ledger_cat ON ledger(user_id, category_id, occur_date);
+
+CREATE TABLE IF NOT EXISTS budget (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT      NOT NULL,
+  period       VARCHAR(8)  NOT NULL,                    -- 2026-11
+  category_id  BIGINT,                                  -- 空 = 总预算
+  amount_cents BIGINT      NOT NULL,
+  created_at   DATETIME    NOT NULL,
+  updated_at   DATETIME    NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_budget ON budget(user_id, period, category_id);
+
+CREATE TABLE IF NOT EXISTS account (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id                BIGINT       NOT NULL,
+  name                   VARCHAR(64)  NOT NULL,
+  type                   VARCHAR(16)  NOT NULL,         -- bank/cash/alipay/wechat/invest/credit
+  initial_balance_cents  BIGINT       NOT NULL DEFAULT 0,
+  currency               VARCHAR(8)   NOT NULL DEFAULT 'CNY',
+  icon                   VARCHAR(64),
+  color                  VARCHAR(16),
+  sort_order             INTEGER      NOT NULL DEFAULT 0,
+  archived               TINYINT      NOT NULL DEFAULT 0,
+  created_at             DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_account_user ON account(user_id, archived, sort_order);
+
+CREATE TABLE IF NOT EXISTS anniversary (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  title         VARCHAR(100) NOT NULL,
+  type          VARCHAR(16)  NOT NULL DEFAULT 'birthday', -- birthday/wedding/memorial
+  person        VARCHAR(64),
+  date          DATE         NOT NULL,
+  lunar         TINYINT      NOT NULL DEFAULT 0,
+  repeat_yearly TINYINT      NOT NULL DEFAULT 1,
+  advance_days  INTEGER      NOT NULL DEFAULT 3,
+  contact_id    BIGINT,
+  note          VARCHAR(200),
+  created_at    DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_anniv_user ON anniversary(user_id, date);
+
+CREATE TABLE IF NOT EXISTS countdown (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  title       VARCHAR(100) NOT NULL,
+  target_date DATE         NOT NULL,
+  type        VARCHAR(16)  NOT NULL DEFAULT 'custom',   -- holiday/trip/goal/custom
+  icon        VARCHAR(64),
+  color       VARCHAR(16),
+  pinned      TINYINT      NOT NULL DEFAULT 0,
+  note        VARCHAR(200),
+  created_at  DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_countdown_date ON countdown(user_id, target_date);
+
+CREATE TABLE IF NOT EXISTS shopping_list (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT       NOT NULL,
+  name         VARCHAR(100) NOT NULL,
+  icon         VARCHAR(64),
+  budget_cents BIGINT       NOT NULL DEFAULT 0,
+  status       VARCHAR(16)  NOT NULL DEFAULT 'open',
+  created_at   DATETIME     NOT NULL,
+  updated_at   DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_slist_user ON shopping_list(user_id, status);
+
+CREATE TABLE IF NOT EXISTS shopping_item (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      BIGINT       NOT NULL,
+  list_id      BIGINT       NOT NULL,
+  name         VARCHAR(120) NOT NULL,
+  quantity     DECIMAL      NOT NULL DEFAULT 1,
+  unit         VARCHAR(16),
+  price_cents  BIGINT       NOT NULL DEFAULT 0,
+  category     VARCHAR(32),
+  bought       TINYINT      NOT NULL DEFAULT 0,
+  bought_at    DATETIME,
+  sort_order   INTEGER      NOT NULL DEFAULT 0,
+  created_at   DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sitem_list ON shopping_item(list_id, bought, sort_order);
+
+CREATE TABLE IF NOT EXISTS habit (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  module        VARCHAR(16)  NOT NULL DEFAULT 'life',   -- study/life
+  name          VARCHAR(64)  NOT NULL,
+  icon          VARCHAR(64),
+  color         VARCHAR(16),
+  type          VARCHAR(16)  NOT NULL DEFAULT 'boolean',-- boolean/count
+  target_value  INTEGER      NOT NULL DEFAULT 1,
+  unit          VARCHAR(16),
+  frequency     VARCHAR(255),                           -- RRULE，空=每天
+  reminder_time VARCHAR(8),
+  archived      TINYINT      NOT NULL DEFAULT 0,
+  sort_order    INTEGER      NOT NULL DEFAULT 0,
+  created_at    DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_habit_user ON habit(user_id, archived, sort_order);
+
+CREATE TABLE IF NOT EXISTS habit_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT   NOT NULL,
+  habit_id   BIGINT   NOT NULL,
+  log_date   DATE     NOT NULL,
+  value      INTEGER  NOT NULL DEFAULT 1,
+  note       VARCHAR(200),
+  created_at DATETIME NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_habit_log ON habit_log(habit_id, log_date);
+
+CREATE INDEX IF NOT EXISTS idx_habitlog_user ON habit_log(user_id, log_date);
+
+CREATE TABLE IF NOT EXISTS health_record (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT      NOT NULL,
+  type        VARCHAR(16) NOT NULL,                     -- weight/sleep/exercise
+  record_date DATE        NOT NULL,
+  value1      DECIMAL,                                  -- 体重kg / 睡眠h / 运动min
+  value2      DECIMAL,                                  -- 体脂率 / 深睡h / 距离km
+  unit        VARCHAR(16),
+  note        VARCHAR(200),
+  created_at  DATETIME    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_health_date ON health_record(user_id, type, record_date);
+
+CREATE TABLE IF NOT EXISTS profile_item (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  category      VARCHAR(32)  NOT NULL,                  -- id_card/passport/license/insurance/other
+  title         VARCHAR(100) NOT NULL,
+  content_cipher TEXT,                                  -- AES-256-GCM
+  expire_date   DATE,
+  remind_days   INTEGER      NOT NULL DEFAULT 30,
+  file_id       BIGINT,
+  created_at    DATETIME     NOT NULL,
+  updated_at    DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_profile_user ON profile_item(user_id, category);
+
+CREATE TABLE IF NOT EXISTS trip (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  title         VARCHAR(120) NOT NULL,
+  destination   VARCHAR(120),
+  start_date    DATE,
+  end_date      DATE,
+  budget_cents  BIGINT       NOT NULL DEFAULT 0,
+  cost_cents    BIGINT       NOT NULL DEFAULT 0,
+  status        VARCHAR(16)  NOT NULL DEFAULT 'planning',
+  cover_file_id BIGINT,
+  note          TEXT,
+  created_at    DATETIME     NOT NULL,
+  updated_at    DATETIME     NOT NULL,
+  deleted       TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_trip_user ON trip(user_id, start_date);
+
+CREATE TABLE IF NOT EXISTS trip_schedule (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  trip_id       BIGINT       NOT NULL,
+  schedule_date DATE,
+  start_time    VARCHAR(8),
+  title         VARCHAR(200) NOT NULL,
+  location      VARCHAR(200),
+  note          TEXT,
+  sort_order    INTEGER      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_tschedule_trip ON trip_schedule(trip_id, schedule_date, sort_order);
+
+CREATE TABLE IF NOT EXISTS life_log (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  title         VARCHAR(200) NOT NULL,
+  content       TEXT,
+  mood          VARCHAR(16),                            -- happy/calm/tired/sad/excited
+  weather       VARCHAR(32),
+  location      VARCHAR(120),
+  log_date      DATE         NOT NULL,
+  cover_file_id BIGINT,
+  created_at    DATETIME     NOT NULL,
+  updated_at    DATETIME     NOT NULL,
+  deleted       TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_lifelog_date ON life_log(user_id, log_date);
+
+CREATE TABLE IF NOT EXISTS wish (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  title       VARCHAR(200) NOT NULL,
+  category    VARCHAR(32),
+  description TEXT,
+  target_date DATE,
+  done        TINYINT      NOT NULL DEFAULT 0,
+  done_at     DATETIME,
+  sort_order  INTEGER      NOT NULL DEFAULT 0,
+  created_at  DATETIME     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_wish_user ON wish(user_id, done, sort_order);
+
+CREATE TABLE IF NOT EXISTS note (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT       NOT NULL,
+  module     VARCHAR(16)  NOT NULL DEFAULT 'work',      -- work/study/life
+  type       VARCHAR(16)  NOT NULL DEFAULT 'note',      -- note/work_log/idea/memo/diary
+  title      VARCHAR(200) NOT NULL,
+  content    TEXT,                                      -- Markdown
+  tags       VARCHAR(255),
+  folder     VARCHAR(64),
+  pinned     TINYINT      NOT NULL DEFAULT 0,
+  archived   TINYINT      NOT NULL DEFAULT 0,
+  word_count INTEGER      NOT NULL DEFAULT 0,
+  created_at DATETIME     NOT NULL,
+  updated_at DATETIME     NOT NULL,
+  deleted    TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_user ON note(user_id, module, type, updated_at);
+
+CREATE TABLE IF NOT EXISTS journal (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id        BIGINT       NOT NULL,
+  journal_type   VARCHAR(16)  NOT NULL DEFAULT 'daily',   -- daily/weekly/monthly/yearly
+  title          VARCHAR(200) NOT NULL,
+  period_start   DATE         NOT NULL,
+  period_end     DATE         NOT NULL,
+  template_key   VARCHAR(32)  NOT NULL DEFAULT 'standard',
+  content        TEXT,                                    -- Markdown（Vditor）
+  stats_json     TEXT,                                    -- 周期统计快照，不随任务变化重算
+  auto_generated TINYINT      NOT NULL DEFAULT 0,
+  created_at     DATETIME     NOT NULL,
+  updated_at     DATETIME     NOT NULL,
+  deleted        TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_journal_user_period ON journal(user_id, period_start);
+
+CREATE TABLE IF NOT EXISTS doc_asset (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  title       VARCHAR(200) NOT NULL,
+  doc_type    VARCHAR(16)  NOT NULL DEFAULT 'markdown',  -- markdown/link/file
+  provider    VARCHAR(32),                               -- feishu/tencent/yuque/other
+  url         VARCHAR(1000),
+  content     TEXT,
+  file_id     BIGINT,
+  category    VARCHAR(64),
+  tags        VARCHAR(255),
+  description VARCHAR(500),
+  pinned      TINYINT      NOT NULL DEFAULT 0,
+  created_at  DATETIME     NOT NULL,
+  updated_at  DATETIME     NOT NULL,
+  deleted     TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_doc_asset_user ON doc_asset(user_id, doc_type);
+
+CREATE TABLE IF NOT EXISTS nav_link (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  module      VARCHAR(16)  NOT NULL DEFAULT 'work',      -- work/study
+  group_name  VARCHAR(64)  NOT NULL DEFAULT '常用',
+  title       VARCHAR(120) NOT NULL,
+  url         VARCHAR(1000) NOT NULL,
+  icon        VARCHAR(255),
+  description VARCHAR(255),
+  click_count INTEGER      NOT NULL DEFAULT 0,
+  sort_order  INTEGER      NOT NULL DEFAULT 0,
+  created_at  DATETIME     NOT NULL,
+  updated_at  DATETIME     NOT NULL,
+  deleted     TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_nav_link_user ON nav_link(user_id, module, sort_order);
+
+CREATE TABLE IF NOT EXISTS album (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     BIGINT       NOT NULL,
+  name        VARCHAR(120) NOT NULL,
+  description VARCHAR(500),
+  cover_url   VARCHAR(1000),
+  created_at  DATETIME     NOT NULL,
+  updated_at  DATETIME     NOT NULL,
+  deleted     TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS photo (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT       NOT NULL,
+  album_id   BIGINT       NOT NULL,
+  title      VARCHAR(200),
+  url        VARCHAR(1000) NOT NULL,
+  file_id    BIGINT,
+  taken_at   DATE,
+  sort_order INTEGER      NOT NULL DEFAULT 0,
+  created_at DATETIME     NOT NULL,
+  deleted    TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_photo_album ON photo(album_id, sort_order);

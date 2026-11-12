@@ -1,0 +1,13 @@
+package cn.minims.desk.modules.auth.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+
+/**
+ * 登录入参。
+ */
+public record LoginDTO(
+        @NotBlank(message = "请输入用户名") @Size(max = 128, message = "账号过长") String username,
+        @NotBlank(message = "请输入密码") @Size(max = 64, message = "密码过长") String password
+) {
+}

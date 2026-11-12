@@ -1,0 +1,93 @@
+@use './variables.scss' as *;
+
+// Element Plus 全局视觉对齐（只在这里覆盖，业务组件禁止 !important）
+
+.el-button {
+  border-radius: var(--el-border-radius-base);
+  font-weight: 500;
+  transition: box-shadow $duration-fast $ease-out, transform $duration-fast $ease-out;
+}
+
+// 主按钮统一青绿并带一层柔和投影，避免「默认蓝按钮」破坏整体色调
+.el-button--primary:not(.is-text):not(.is-link):not(.is-plain) {
+  /* 主色走主题变量：换主题时按钮跟着变，不能写死青绿 */
+  background: linear-gradient(135deg, var(--brand-400), var(--brand-500));
+  border-color: transparent;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-500) 26%, transparent);
+
+  &:hover {
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--brand-400) 82%, #fff),
+      var(--brand-500)
+    );
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-500) 34%, transparent);
+    transform: translateY(-1px);
+  }
+}
+
+.el-button--primary.is-link,
+.el-button--primary.is-text {
+  color: var(--brand-600);
+}
+
+.el-button--large {
+  border-radius: 12px;
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: 10px;
+}
+
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--brand-400) inset;
+}
+
+.el-tag {
+  border-radius: 7px;
+}
+
+.el-card,
+.el-message-box {
+  border-radius: 16px;
+}
+
+.el-pagination {
+  --el-pagination-button-bg-color: transparent;
+}
+
+.el-card {
+  border-radius: var(--radius-xl);
+}
+
+// 弹窗圆角与阴影
+.el-dialog {
+  border-radius: 16px;
+  box-shadow: var(--shadow-float);
+}
+
+.el-drawer {
+  --el-drawer-bg-color: var(--bg-card);
+}
+
+// 移动端侧栏抽屉：内容自己撑满，去掉默认内边距
+.sidebar-drawer {
+  .el-drawer__body {
+    padding: 0;
+    overflow: hidden;
+  }
+}
+
+// 空状态文字色
+.el-empty__description p {
+  color: var(--text-tertiary);
+}
+
+// 表格贴合后台的紧凑密度（后台页面单独加 .console-theme 再收紧）
+.el-table {
+  --el-table-border-color: var(--border-color);
+  --el-table-header-bg-color: var(--bg-subtle);
+  --el-table-row-hover-bg-color: var(--bg-hover);
+}

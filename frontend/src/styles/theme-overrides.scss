@@ -1,0 +1,40 @@
+// 跨组件的主题修正（全局作用域）
+//
+// 为什么不写在组件里：Vue 的 scoped CSS 会把 `:global(A) .b` 编译成 `A{…}`，
+// 后代选择器整段丢失（构建后的 CSS 里只剩 `[data-theme=night]{background:…}`），
+// 于是背景被错加到 <html> 上、组件毫无变化。这类规则统一放这里。
+
+// ---- 深色主题：模块卡的浅色卡头压暗成「有色深底」 ----
+html[data-theme='night'] .module__head,
+html[data-theme='dark'] .module__head {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--head-from) 30%, var(--bg-card)) 0%,
+    color-mix(in srgb, var(--head-to) 16%, var(--bg-card)) 62%,
+    var(--bg-card) 100%
+  );
+}
+
+// ---- 深色主题：图标底色改用图标色混合，避免一排亮色小方块 ----
+html[data-theme='night'] .app-item__tile,
+html[data-theme='dark'] .app-item__tile {
+  background: color-mix(in srgb, var(--tile-fg) 20%, transparent);
+}
+
+// ---- 横版 logo 是白底图：浅色主题用 multiply 融掉白底，
+//      深色主题 multiply 会让整张图糊成黑块，改为留在白色小托板上 ----
+html[data-theme='night'] .brand-logo__wide,
+html[data-theme='dark'] .brand-logo__wide,
+html[data-theme='night'] .login__logo,
+html[data-theme='dark'] .login__logo {
+  mix-blend-mode: normal;
+  padding: 3px 10px;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+// ---- 深色主题：浅色渐变的分隔/描边统一降一档 ----
+html[data-theme='night'] .quick__label {
+  border-right-color: rgba(255, 255, 255, 0.08);
+}

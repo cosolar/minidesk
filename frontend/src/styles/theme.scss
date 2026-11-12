@@ -1,0 +1,465 @@
+// 运行期设计 token（CSS 变量）
+//
+// 五套主题：mint 青绿山水 / violet 紫色极简 / night 深色星空 / warm 暖色温馨 / pure 简约纯净
+// 每套都完整定义同一组变量，组件只消费变量，不写死颜色。
+//
+// 注意两点：
+// 1) Element Plus 的主色必须挂在 `html[data-theme='x']` 上（特异度高于 :root），
+//    否则按需引入的组件样式会追加到 bundle 末尾，把主色顶回默认蓝。
+// 2) 暗色主题要同时给 <html> 加 `.dark` 类，Element Plus 的暗色变量才生效。
+
+:root {
+  /* 字体：设计稿是 MiSans 一类的现代黑体，本机有 Noto Sans SC 变量字体，优先用它 */
+  --font-sans: 'Noto Sans SC', 'MiSans', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei',
+    system-ui, -apple-system, sans-serif;
+  --font-display: 'MiSans', 'Noto Sans SC', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei',
+    system-ui, sans-serif;
+  --font-number: 'DIN Alternate', 'DIN Next LT Pro', 'Noto Sans SC', system-ui, sans-serif;
+
+  --el-border-radius-base: 10px;
+  --el-border-radius-small: 8px;
+}
+
+// ============================================================
+// 1. 青绿 · 山水主题（默认）
+// ============================================================
+:root,
+[data-theme='mint'] {
+  --brand-50: #f0fbf7;
+  --brand-100: #e3f7ef;
+  --brand-200: #c6efe1;
+  --brand-400: #5fe0be;
+  --brand-500: #35c79b;
+  --brand-600: #23a981;
+  --brand-700: #17795d;
+
+  --text-primary: #1b2a32;
+  --text-secondary: #6b7c87;
+  --text-tertiary: #9aa8b2;
+  --text-inverse: #ffffff;
+
+  --bg-page: #f4faf8;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7faf9;
+  --bg-hover: #f0fbf7;
+  --border-color: #eaf2ef;
+  --border-strong: #d7e5df;
+
+  --c-work: #4a86e8;
+  --c-work-bg: #edf3fe;
+  --c-study: #8b7cf6;
+  --c-study-bg: #f2effe;
+  --c-life: #ff9f43;
+  --c-life-bg: #fff4e7;
+  --c-alert: #ff6b6b;
+  --c-alert-bg: #fff0f0;
+
+  --shadow-card: 0 8px 24px rgba(23, 74, 60, 0.05);
+  --shadow-card-hover: 0 14px 34px rgba(23, 74, 60, 0.11);
+  --shadow-float: 0 10px 30px rgba(23, 74, 60, 0.1);
+
+  --sidebar-bg-from: #fbfefd;
+  --sidebar-bg-to: #eef9f4;
+  --header-bg: rgba(250, 253, 252, 0.86);
+
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.72);
+  --surface-glass: rgba(255, 255, 255, 0.86);
+  --surface-glass-strong: rgba(255, 255, 255, 0.96);
+  --surface-soft: rgba(255, 255, 255, 0.62);
+  --row-hover: #f7fbfa;
+
+  /* Hero 与登录页共用同一张实景图，只是调色不同 */
+  --hero-photo-filter: saturate(0.96) brightness(1.02);
+  --hero-photo-opacity: 1;
+  --hero-haze: radial-gradient(
+      58% 118% at 4% 46%,
+      rgba(250, 253, 252, 0.94) 0%,
+      rgba(250, 253, 252, 0.62) 42%,
+      rgba(250, 253, 252, 0) 78%
+    ),
+    linear-gradient(180deg, rgba(250, 253, 252, 0.5) 0%, rgba(250, 253, 252, 0) 26%);
+  --hero-tint: linear-gradient(180deg, rgba(53, 199, 155, 0.05) 0%, rgba(53, 199, 155, 0) 60%);
+  --hero-tint-blend: normal;
+  --hero-tint-opacity: 1;
+  --hero-title: #14313a;
+  --hero-sub: #4d6a63;
+  --hero-fade-mid: rgba(244, 250, 248, 0.72);
+  --login-veil: linear-gradient(
+    180deg,
+    rgba(250, 253, 252, 0.94) 0%,
+    rgba(250, 253, 252, 0.62) 24%,
+    rgba(250, 253, 252, 0.1) 46%,
+    rgba(9, 62, 50, 0.42) 100%
+  );
+  --footer-art-filter: saturate(0.9);
+}
+
+// ============================================================
+// 2. 紫色 · 极简风格
+// ============================================================
+[data-theme='violet'] {
+  --brand-50: #f5f3ff;
+  --brand-100: #ece8fe;
+  --brand-200: #dad2fc;
+  --brand-400: #a495fa;
+  --brand-500: #7b6cf6;
+  --brand-600: #6a58e8;
+  --brand-700: #4f3fc4;
+
+  --text-primary: #232136;
+  --text-secondary: #6f6a86;
+  --text-tertiary: #a09ab8;
+  --text-inverse: #ffffff;
+
+  --bg-page: #f5f4fb;
+  --bg-card: #ffffff;
+  --bg-subtle: #f8f7fd;
+  --bg-hover: #f2effe;
+  --border-color: #eeecf8;
+  --border-strong: #ded9f2;
+
+  --c-work: #5b8def;
+  --c-work-bg: #edf3fe;
+  --c-study: #8b7cf6;
+  --c-study-bg: #f2effe;
+  --c-life: #ff9f43;
+  --c-life-bg: #fff4e7;
+  --c-alert: #ff6b6b;
+  --c-alert-bg: #fff0f0;
+
+  --shadow-card: 0 8px 24px rgba(64, 48, 140, 0.06);
+  --shadow-card-hover: 0 14px 34px rgba(64, 48, 140, 0.14);
+  --shadow-float: 0 10px 30px rgba(64, 48, 140, 0.12);
+
+  --sidebar-bg-from: #fdfcff;
+  --sidebar-bg-to: #f2effc;
+  --header-bg: rgba(250, 249, 255, 0.86);
+
+  --glass-bg: rgba(255, 255, 255, 0.66);
+  --glass-border: rgba(255, 255, 255, 0.78);
+  --surface-glass: rgba(255, 255, 255, 0.88);
+  --surface-glass-strong: rgba(255, 255, 255, 0.97);
+  --surface-soft: rgba(255, 255, 255, 0.66);
+  --row-hover: #faf9ff;
+
+  --hero-photo-filter: saturate(0.42) brightness(1.05) contrast(1.02);
+  --hero-photo-opacity: 1;
+  --hero-haze: radial-gradient(
+      60% 120% at 2% 44%,
+      rgba(248, 246, 255, 0.95) 0%,
+      rgba(248, 246, 255, 0.6) 44%,
+      rgba(248, 246, 255, 0) 80%
+    ),
+    linear-gradient(180deg, rgba(248, 246, 255, 0.5) 0%, rgba(248, 246, 255, 0) 28%);
+  /* color 混合只改色相、不动明暗，照片会变成淡紫色调而不是「加一层紫玻璃」 */
+  --hero-tint: linear-gradient(180deg, #b3a3ff 0%, #8b78f7 55%, #7b6cf6 100%);
+  --hero-tint-blend: color;
+  --hero-tint-opacity: 0.52;
+  --hero-title: #2b2547;
+  --hero-sub: #5f587c;
+  --hero-fade-mid: rgba(245, 244, 251, 0.72);
+  --login-veil: linear-gradient(
+    180deg,
+    rgba(249, 247, 255, 0.94) 0%,
+    rgba(249, 247, 255, 0.6) 24%,
+    rgba(88, 66, 160, 0.16) 50%,
+    rgba(52, 38, 104, 0.5) 100%
+  );
+  --footer-art-filter: saturate(0.62) hue-rotate(38deg) brightness(1.04);
+}
+
+// ============================================================
+// 3. 深色 · 星空主题
+// ============================================================
+[data-theme='night'],
+[data-theme='dark'] {
+  --brand-50: #171a2b;
+  --brand-100: #1d2236;
+  --brand-200: #2a3454;
+  --brand-400: #8ba2ff;
+  --brand-500: #6e8bff;
+  --brand-600: #8ba2ff;
+  --brand-700: #b3c3ff;
+
+  --text-primary: #e8ecf7;
+  --text-secondary: #9aa5bd;
+  --text-tertiary: #6b7690;
+  --text-inverse: #0b0f1a;
+
+  --bg-page: #0f1320;
+  --bg-card: #171c2b;
+  --bg-subtle: #1b2132;
+  --bg-hover: #222a3d;
+  --border-color: rgba(255, 255, 255, 0.07);
+  --border-strong: rgba(255, 255, 255, 0.15);
+
+  --c-work: #7ea6f5;
+  --c-work-bg: #1a2438;
+  --c-study: #a99bf8;
+  --c-study-bg: #221f36;
+  --c-life: #ffb066;
+  --c-life-bg: #2c2219;
+  --c-alert: #ff8080;
+  --c-alert-bg: #2e1c1c;
+
+  --shadow-card: 0 8px 26px rgba(0, 0, 0, 0.32);
+  --shadow-card-hover: 0 14px 36px rgba(0, 0, 0, 0.46);
+  --shadow-float: 0 10px 30px rgba(0, 0, 0, 0.4);
+
+  --sidebar-bg-from: #131829;
+  --sidebar-bg-to: #0d1120;
+  --header-bg: rgba(15, 19, 32, 0.8);
+
+  --glass-bg: rgba(26, 32, 52, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --surface-glass: rgba(23, 28, 43, 0.74);
+  --surface-glass-strong: rgba(26, 32, 50, 0.92);
+  --surface-soft: rgba(255, 255, 255, 0.05);
+  --row-hover: rgba(255, 255, 255, 0.04);
+
+  --hero-photo-filter: brightness(0.4) saturate(0.7) contrast(1.06) hue-rotate(-18deg);
+  --hero-photo-opacity: 1;
+  /* 星点用多层 radial-gradient 叠出来，不额外加载图片 */
+  --hero-haze: radial-gradient(
+      60% 120% at 4% 40%,
+      rgba(13, 17, 32, 0.9) 0%,
+      rgba(13, 17, 32, 0.55) 44%,
+      rgba(13, 17, 32, 0) 78%
+    ),
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.9) 0 1px, transparent 1.6px),
+    radial-gradient(circle at 34% 12%, rgba(255, 255, 255, 0.7) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 52% 26%, rgba(255, 255, 255, 0.8) 0 1.2px, transparent 1.8px),
+    radial-gradient(circle at 68% 10%, rgba(255, 255, 255, 0.6) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 82% 24%, rgba(255, 255, 255, 0.75) 0 1.1px, transparent 1.7px),
+    radial-gradient(circle at 92% 8%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.4px);
+  --hero-tint: linear-gradient(
+    180deg,
+    rgba(30, 45, 96, 0.42) 0%,
+    rgba(16, 24, 52, 0.34) 54%,
+    rgba(15, 19, 32, 0.72) 100%
+  );
+  --hero-tint-blend: normal;
+  --hero-tint-opacity: 1;
+  --hero-title: #eef3ff;
+  --hero-sub: #a7b6d8;
+  --hero-fade-mid: rgba(15, 19, 32, 0.7);
+  --login-veil: linear-gradient(
+    180deg,
+    rgba(15, 19, 32, 0.9) 0%,
+    rgba(15, 19, 32, 0.55) 22%,
+    rgba(12, 18, 40, 0.3) 48%,
+    rgba(8, 11, 22, 0.78) 100%
+  );
+  --footer-art-filter: brightness(0.35) saturate(0.7) hue-rotate(-18deg);
+}
+
+// ============================================================
+// 4. 暖色 · 温馨主题
+// ============================================================
+[data-theme='warm'] {
+  --brand-50: #fdf6ee;
+  --brand-100: #fbebd9;
+  --brand-200: #f6d7b6;
+  --brand-400: #eba96b;
+  --brand-500: #e2924e;
+  --brand-600: #cc7c3a;
+  --brand-700: #a05f28;
+
+  --text-primary: #3a2f28;
+  --text-secondary: #7b6a5c;
+  --text-tertiary: #a89686;
+  --text-inverse: #ffffff;
+
+  --bg-page: #fdf9f3;
+  --bg-card: #fffdfa;
+  --bg-subtle: #fbf5ec;
+  --bg-hover: #fdf3e6;
+  --border-color: #f4ebdf;
+  --border-strong: #ebdcc9;
+
+  --c-work: #5b8def;
+  --c-work-bg: #edf3fe;
+  --c-study: #b08cf0;
+  --c-study-bg: #f5effe;
+  --c-life: #e2924e;
+  --c-life-bg: #fdf1e2;
+  --c-alert: #e86b5f;
+  --c-alert-bg: #fdeeec;
+
+  --shadow-card: 0 8px 24px rgba(120, 80, 40, 0.06);
+  --shadow-card-hover: 0 14px 34px rgba(120, 80, 40, 0.13);
+  --shadow-float: 0 10px 30px rgba(120, 80, 40, 0.11);
+
+  --sidebar-bg-from: #fffdf9;
+  --sidebar-bg-to: #faf1e3;
+  --header-bg: rgba(255, 252, 246, 0.86);
+
+  --glass-bg: rgba(255, 253, 248, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.8);
+  --surface-glass: rgba(255, 253, 248, 0.9);
+  --surface-glass-strong: rgba(255, 253, 249, 0.97);
+  --surface-soft: rgba(255, 253, 248, 0.7);
+  --row-hover: #fffaf2;
+
+  --hero-photo-filter: saturate(0.5) brightness(1.06) contrast(1.02);
+  --hero-photo-opacity: 1;
+  --hero-haze: radial-gradient(
+      58% 118% at 3% 46%,
+      rgba(255, 251, 244, 0.95) 0%,
+      rgba(255, 251, 244, 0.62) 44%,
+      rgba(255, 251, 244, 0) 80%
+    ),
+    linear-gradient(180deg, rgba(255, 251, 244, 0.5) 0%, rgba(255, 251, 244, 0) 28%);
+  --hero-tint: linear-gradient(180deg, #f5c98f 0%, #e9a866 52%, #dd9147 100%);
+  --hero-tint-blend: color;
+  --hero-tint-opacity: 0.5;
+  --hero-title: #43301f;
+  --hero-sub: #7b6350;
+  --hero-fade-mid: rgba(253, 249, 243, 0.74);
+  --login-veil: linear-gradient(
+    180deg,
+    rgba(255, 251, 244, 0.94) 0%,
+    rgba(255, 251, 244, 0.6) 24%,
+    rgba(120, 70, 30, 0.16) 50%,
+    rgba(72, 42, 18, 0.5) 100%
+  );
+  --footer-art-filter: sepia(0.22) saturate(1.05) brightness(1.05) hue-rotate(-10deg);
+}
+
+// ============================================================
+// 5. 简约 · 纯净主题
+// ============================================================
+[data-theme='pure'] {
+  --brand-50: #f1f8f5;
+  --brand-100: #e6f2ee;
+  --brand-200: #cfe7df;
+  --brand-400: #6ebba5;
+  --brand-500: #2f9e7e;
+  --brand-600: #268468;
+  --brand-700: #1c6551;
+
+  --text-primary: #1f2a2e;
+  --text-secondary: #66757b;
+  --text-tertiary: #9aa8ad;
+  --text-inverse: #ffffff;
+
+  --bg-page: #f8faf9;
+  --bg-card: #ffffff;
+  --bg-subtle: #f5f8f7;
+  --bg-hover: #eff6f3;
+  --border-color: #edf2f0;
+  --border-strong: #dde6e2;
+
+  --c-work: #5c86c9;
+  --c-work-bg: #eff3fa;
+  --c-study: #8a80c9;
+  --c-study-bg: #f2f0fa;
+  --c-life: #d79a5b;
+  --c-life-bg: #faf4ec;
+  --c-alert: #d96a63;
+  --c-alert-bg: #faf0ef;
+
+  --shadow-card: 0 6px 20px rgba(31, 42, 46, 0.05);
+  --shadow-card-hover: 0 12px 30px rgba(31, 42, 46, 0.1);
+  --shadow-float: 0 8px 26px rgba(31, 42, 46, 0.09);
+
+  --sidebar-bg-from: #fdfefd;
+  --sidebar-bg-to: #f5faf8;
+  --header-bg: rgba(252, 254, 253, 0.88);
+
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.86);
+  --surface-glass: rgba(255, 255, 255, 0.9);
+  --surface-glass-strong: rgba(255, 255, 255, 0.98);
+  --surface-soft: rgba(255, 255, 255, 0.7);
+  --row-hover: #f9fbfa;
+
+  --hero-photo-filter: grayscale(0.62) saturate(0.55) brightness(1.14);
+  --hero-photo-opacity: 0.72;
+  --hero-haze: radial-gradient(
+      62% 124% at 2% 44%,
+      rgba(252, 254, 253, 0.97) 0%,
+      rgba(252, 254, 253, 0.78) 46%,
+      rgba(252, 254, 253, 0.1) 82%
+    ),
+    linear-gradient(180deg, rgba(252, 254, 253, 0.72) 0%, rgba(252, 254, 253, 0.12) 30%);
+  --hero-tint: linear-gradient(180deg, #dfe9e5 0%, #cfdcd7 100%);
+  --hero-tint-blend: color;
+  --hero-tint-opacity: 0.34;
+  --hero-title: #1b2a30;
+  --hero-sub: #63736f;
+  --hero-fade-mid: rgba(248, 250, 249, 0.78);
+  --login-veil: linear-gradient(
+    180deg,
+    rgba(252, 254, 253, 0.96) 0%,
+    rgba(252, 254, 253, 0.7) 24%,
+    rgba(180, 200, 194, 0.24) 50%,
+    rgba(38, 62, 56, 0.42) 100%
+  );
+  --footer-art-filter: grayscale(0.6) saturate(0.6) brightness(1.12);
+}
+
+// ============================================================
+// Element Plus 主色（每套主题一组，含 6 个派生色）
+// ============================================================
+html[data-theme='mint'] {
+  --el-color-primary: #35c79b;
+  --el-color-primary-light-3: #71d8b9;
+  --el-color-primary-light-5: #9ae3cd;
+  --el-color-primary-light-7: #c2eee1;
+  --el-color-primary-light-8: #d6f4eb;
+  --el-color-primary-light-9: #ebf9f5;
+  --el-color-primary-dark-2: #2a9f7c;
+  --el-color-success: #35c79b;
+  --el-color-success-light-9: #ebf9f5;
+}
+
+html[data-theme='violet'] {
+  --el-color-primary: #7b6cf6;
+  --el-color-primary-light-3: #a298f9;
+  --el-color-primary-light-5: #bdb5fa;
+  --el-color-primary-light-7: #d7d3fc;
+  --el-color-primary-light-8: #e5e2fd;
+  --el-color-primary-light-9: #f2f0fe;
+  --el-color-primary-dark-2: #6256c5;
+  --el-color-success: #7b6cf6;
+  --el-color-success-light-9: #f2f0fe;
+}
+
+html[data-theme='warm'] {
+  --el-color-primary: #e2924e;
+  --el-color-primary-light-3: #ebb383;
+  --el-color-primary-light-5: #f0c8a6;
+  --el-color-primary-light-7: #f6deca;
+  --el-color-primary-light-8: #f9e9dc;
+  --el-color-primary-light-9: #fcf4ed;
+  --el-color-primary-dark-2: #b5753e;
+  --el-color-success: #e2924e;
+  --el-color-success-light-9: #fcf4ed;
+}
+
+html[data-theme='pure'] {
+  --el-color-primary: #2f9e7e;
+  --el-color-primary-light-3: #6ebba5;
+  --el-color-primary-light-5: #97cebe;
+  --el-color-primary-light-7: #c0e2d8;
+  --el-color-primary-light-8: #d5ece5;
+  --el-color-primary-light-9: #eaf5f2;
+  --el-color-primary-dark-2: #267f65;
+  --el-color-success: #2f9e7e;
+  --el-color-success-light-9: #eaf5f2;
+}
+
+html[data-theme='night'],
+html[data-theme='dark'] {
+  --el-color-primary: #6e8bff;
+  --el-color-primary-light-3: #5267bc;
+  --el-color-primary-light-5: #3e4f8f;
+  --el-color-primary-light-7: #2b3763;
+  --el-color-primary-light-8: #222b4d;
+  --el-color-primary-light-9: #181f36;
+  --el-color-primary-dark-2: #8ba2ff;
+  --el-color-success: #6e8bff;
+  --el-color-success-light-9: #181f36;
+}
