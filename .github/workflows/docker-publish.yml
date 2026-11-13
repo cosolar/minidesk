@@ -242,6 +242,10 @@ jobs:
         run: |
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && docker compose -f deploy/docker-compose.yml ps && \
-             port=\$(grep -E '^MINIDESK_PORT=' deploy/.env | cut -d= -f2); \
-             curl -fsS -o /dev/null -w 'health=%{http_code}\n' http://127.0.0.1:\${port:-18080}/api/auth/register-config"
+            "cd '$DEPLOY_PATH' && docker compose -f deploy/docker-compose.yml ps; \
+             port=\$(grep -E '^MINIDESK_PORT=' deploy/.env | cut -d= -f2); port=\${port:-18080}; \
+             for i in \$(seq 1 30); do \
+               code=\$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:\$port/api/auth/register-config); \
+               if [ \"\$code\" = 200 ]; then echo 'health=200'; exit 0; fi; \
+               echo \"waiting for the service, got \$code\"; sleep 5; \
+             done; echo 'the service did not become healthy'; exit 1"
