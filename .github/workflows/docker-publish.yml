@@ -154,3 +154,82 @@ jobs:
           else
             echo "仅验证构建，未推送。镜像名预留：$IMAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
           fi
+
+  # ---------------------------------------------------------------------------
+  # 部署到服务器：构建好的镜像直接送到目标机加载并重启容器。
+  # 不依赖目标机访问镜像仓库（境内直连 Docker Hub 常常被阻断或极慢）。
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to server
+    needs: publish
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Resolve version
+        id: ver
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            version="${INPUT_VERSION#v}"
+          else
+            version="${REF_NAME#v}"
+          fi
+          [ -z "$version" ] && version="latest"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # 部署用的镜像带版本号与 latest 两个标签，服务器上可直接
+      # docker run minimscn/minidesk:latest 复用，无需再构建。
+      - name: Build the deployable image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: |
+            minimscn/minidesk:latest
+            minimscn/minidesk:${{ steps.ver.outputs.version }}
+          build-args: |
+            NPM_REGISTRY=https://registry.npmjs.org
+          cache-from: type=gha
+
+      - name: Ship the image to the server
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -D ~/.ssh/id_ed25519 <<< "$DEPLOY_SSH_KEY"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          docker save minimscn/minidesk:latest minimscn/minidesk:${{ steps.ver.outputs.version }} \
+            | gzip -1 > minidesk-image.tar.gz
+          echo "image archive: $(du -h minidesk-image.tar.gz | cut -f1)"
+          scp -P "$DEPLOY_PORT" -o StrictHostKeyChecking=yes \
+            minidesk-image.tar.gz deploy/deploy.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+
+      - name: Roll the container on the server
+        run: |
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash /tmp/deploy.sh /tmp/minidesk-image.tar.gz '$DEPLOY_PATH'"
+
+      - name: Verify the deployment
+        run: |
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && docker compose -f deploy/docker-compose.yml ps && \
+             port=\$(grep -E '^MINIDESK_PORT=' deploy/.env | cut -d= -f2); \
+             curl -fsS -o /dev/null -w 'health=%{http_code}\n' http://127.0.0.1:\${port:-18080}/api/auth/register-config"
