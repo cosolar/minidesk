@@ -212,22 +212,49 @@ public class ConsoleService {
         return PageResult.of(rows, total, page, size);
     }
 
-    public PageResult<ConsoleVO.OperLog> operLogs(long page, long size) {
-        long total = count("select count(*) from sys_oper_log");
+    public PageResult<ConsoleVO.OperLog> operLogs(long page, long size, String keyword, String result) {
+        StringBuilder where = new StringBuilder(64).append(" where 1 = 1 ");
+        List<Object> args = new ArrayList<>(8);
+        if (StringUtils.hasText(keyword)) {
+            where.append(" and (username like ? or module like ? or action like ? or target_id like ?) ");
+            String pattern = "%" + keyword.trim() + "%";
+            args.add(pattern);
+            args.add(pattern);
+            args.add(pattern);
+            args.add(pattern);
+        }
+        if (StringUtils.hasText(result)) {
+            where.append(" and result = ? ");
+            args.add(result.trim());
+        }
+        long total = count("select count(*) from sys_oper_log" + where, args.toArray());
+
+        List<Object> pageArgs = new ArrayList<>(args);
+        pageArgs.add(size);
+        pageArgs.add((page - 1) * size);
         List<ConsoleVO.OperLog> rows = jdbc.query("""
-                        select id, username, module, action, target_type, target_id, result, created_at
-                        from sys_oper_log order by id desc limit ? offset ?
-                        """,
-                (rs, rowNum) -> new ConsoleVO.OperLog(
-                        String.valueOf(rs.getLong("id")),
-                        rs.getString("username"),
-                        rs.getString("module"),
-                        rs.getString("action"),
-                        rs.getString("target_type"),
-                        rs.getString("target_id"),
-                        rs.getString("result"),
-                        rs.getString("created_at")),
-                size, (page - 1) * size);
+                        select id, username, module, action, target_type, target_id, result,
+                               created_at, params, error_msg, cost_ms, trace_id
+                        from sys_oper_log
+                        """ + where + " order by id desc limit ? offset ?",
+                (rs, rowNum) -> {
+                    long cost = rs.getLong("cost_ms");
+                    Long costMs = rs.wasNull() ? null : cost;
+                    return new ConsoleVO.OperLog(
+                            String.valueOf(rs.getLong("id")),
+                            rs.getString("username"),
+                            rs.getString("module"),
+                            rs.getString("action"),
+                            rs.getString("target_type"),
+                            rs.getString("target_id"),
+                            rs.getString("result"),
+                            rs.getString("created_at"),
+                            rs.getString("params"),
+                            rs.getString("error_msg"),
+                            costMs,
+                            rs.getString("trace_id"));
+                },
+                pageArgs.toArray());
         return PageResult.of(rows, total, page, size);
     }
 

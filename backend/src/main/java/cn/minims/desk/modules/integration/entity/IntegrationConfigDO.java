@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import lombok.Data;
 
 /**
- * 第三方集成配置（和风天气 / Halo 知识库）。
+ * 第三方集成配置（和风天气 / MiniDocs 知识库）。
  * apiKeyCipher 存 AES-GCM 密文，明文只在保存瞬间存在于内存。
  */
 @Data

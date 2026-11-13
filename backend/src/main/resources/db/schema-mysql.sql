@@ -172,6 +172,7 @@ CREATE TABLE IF NOT EXISTS `job_exec_log` (
   `finished_at` DATETIME,
   `success` TINYINT NOT NULL DEFAULT 1,
   `cost_ms` BIGINT,
+  `message` VARCHAR(500),  -- 执行结果摘要
   `error_msg` VARCHAR(1000),
   `trigger_by` VARCHAR(16) DEFAULT 'cron',  -- cron/manual
   PRIMARY KEY (`id`),
@@ -910,4 +911,24 @@ CREATE TABLE IF NOT EXISTS `photo` (
   `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_photo_album` (`album_id`, `sort_order`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sys_schedule_job` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `job_code` VARCHAR(64) NOT NULL,
+  `job_name` VARCHAR(100) NOT NULL,
+  `description` VARCHAR(255),
+  `cron_expr` VARCHAR(64) NOT NULL,
+  `enabled` TINYINT NOT NULL DEFAULT 1,
+  `allow_manual` TINYINT NOT NULL DEFAULT 1,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `last_run_at` DATETIME,
+  `last_status` VARCHAR(16),
+  `last_cost_ms` BIGINT,
+  `last_error` VARCHAR(500),
+  `next_run_at` DATETIME,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_schedule_job` (`job_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

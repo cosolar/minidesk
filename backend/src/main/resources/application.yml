@@ -5,12 +5,14 @@ server:
 spring:
   servlet:
     multipart:
-      max-file-size: 20MB
-      max-request-size: 24MB
+      # 备份包含附件与品牌资源，恢复包体积可能远大于普通上传
+      max-file-size: 512MB
+      max-request-size: 520MB
   application:
     name: minidesk
   datasource:
-    url: jdbc:sqlite:./data/minidesk.db
+    # 与 minidesk.data-dir 同源；改 MINIDESK_DATA_DIR 时主库会一起迁移
+    url: jdbc:sqlite:${minidesk.data-dir}/minidesk.db
     driver-class-name: org.sqlite.JDBC
     hikari:
       maximum-pool-size: 8
@@ -28,7 +30,9 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 生产不要输出 SQL：integration_config 等表含加密凭据，StdOutImpl 会把整行密文
+    # （含参数）打进控制台日志。需要排查 SQL 时再临时改成 stdout 实现。
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
   type-handlers-package: cn.minims.desk.framework.mybatis.handler
   global-config:
     banner: false
@@ -50,7 +54,10 @@ sa-token:
   jwt-secret-key: ${SA_TOKEN_SECRET:minidesk-dev-secret-please-override-in-prod}
 
 minidesk:
-  data-dir: ./data
+  # 与 RestoreBootstrap 的启动参数保持一致；单 Jar 部署时建议改成绝对路径
+  data-dir: ${MINIDESK_DATA_DIR:./data}
+  # 可选：首次启动时把知识库 mdt_ 令牌加密写入 integration_config；已有配置不覆盖
+  minidocs-token: ${MINIDESK_MINIDOCS_TOKEN:}
   register:
     # 公网部署时设置该环境变量，首个管理员注册需填写
     claim-token: ${MINIDESK_CLAIM_TOKEN:}

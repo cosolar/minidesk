@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 导航链接接口：工作「工具」与学习「资源」共用。
+ * 导航链接接口：工作「书签」与学习「资源」共用。
  */
 @RestController
 @RequestMapping("/api/nav-links")

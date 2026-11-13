@@ -43,6 +43,18 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-cache</artifactId>
     </dependency>
+    <!-- 持久化调度：任务定义与执行历史落库，Quartz 负责触发（RAMJobStore） -->
+    <dependency>
+      <groupId>org.quartz-scheduler</groupId>
+      <artifactId>quartz</artifactId>
+      <version>2.5.2</version>
+    </dependency>
+    <!-- 审计日志切面；Spring Boot 的 AopAutoConfiguration 检测到该类后自动启用 -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjweaver</artifactId>
+      <version>1.9.25.1</version>
+    </dependency>
 
     <dependency>
       <groupId>com.baomidou</groupId>
@@ -111,6 +123,40 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <profiles>
+    <!-- 单 Jar：把 frontend/dist 打进 BOOT-INF/classes/static，java -jar 即可同时提供页面与接口 -->
+    <profile>
+      <id>single-jar</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <version>3.3.1</version>
+            <executions>
+              <execution>
+                <id>copy-frontend-dist</id>
+                <phase>generate-resources</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${project.basedir}/../frontend/dist</directory>
+                      <filtering>false</filtering>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
   <build>
     <finalName>minidesk</finalName>

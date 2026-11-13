@@ -60,7 +60,11 @@ public record ConsoleVO(
             String targetType,
             String targetId,
             String result,
-            String createdAt
+            String createdAt,
+            String params,
+            String errorMsg,
+            Long costMs,
+            String traceId
     ) {
     }
 

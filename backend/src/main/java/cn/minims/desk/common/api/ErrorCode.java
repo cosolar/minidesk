@@ -31,7 +31,20 @@ public enum ErrorCode {
     MAIL_NOT_CONFIGURED(60040, "管理员尚未配置发件邮箱"),
     EMAIL_CODE_INVALID(60041, "验证码无效或已过期"),
     EMAIL_CODE_LIMIT(60042, "验证码发送过于频繁，请稍后再试"),
-    MAIL_SEND_FAILED(60043, "邮件发送失败，请检查发件配置");
+    MAIL_SEND_FAILED(60043, "邮件发送失败，请检查发件配置"),
+
+    JOB_NOT_FOUND(60050, "定时任务不存在"),
+    JOB_RUNNING(60051, "该任务正在执行，请稍后再试"),
+    JOB_CRON_INVALID(60052, "Cron 表达式不合法"),
+    BACKUP_FAILED(60053, "备份生成失败"),
+    BACKUP_NOT_FOUND(60054, "备份文件不存在"),
+    RESTORE_INVALID(60055, "恢复包无效或已损坏"),
+    RESTORE_PENDING(60056, "已有待生效的恢复包，请先重启应用"),
+
+    KB_NOT_CONFIGURED(60060, "尚未配置知识库访问令牌"),
+    KB_TOKEN_INVALID(60061, "知识库访问令牌无效或已被吊销"),
+    KB_UPSTREAM_ERROR(60062, "知识库服务请求失败"),
+    KB_READ_ONLY(60063, "访问令牌只有只读权限，无法写入");
 
     private final int code;
     private final String message;

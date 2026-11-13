@@ -2,6 +2,7 @@ package cn.minims.desk.modules.console.controller;
 
 import cn.dev33.satoken.annotation.SaCheckRole;
 import cn.minims.desk.common.api.PageResult;
+import cn.minims.desk.framework.audit.AuditLog;
 import cn.minims.desk.common.api.Result;
 import cn.minims.desk.modules.console.service.ConsoleService;
 import cn.minims.desk.modules.console.vo.ConsoleVO;
@@ -48,6 +49,7 @@ public class ConsoleController {
     }
 
     @PostMapping("/users")
+    @AuditLog(module = "console-user", action = "create", targetType = "user")
     public Result<Void> createUser(@RequestBody Map<String, Object> body) {
         consoleService.createUser(
                 body.get("username") == null ? null : String.valueOf(body.get("username")),
@@ -58,17 +60,20 @@ public class ConsoleController {
     }
 
     @PatchMapping("/users/{id}/status")
+    @AuditLog(module = "console-user", action = "toggle-status", targetType = "user")
     public Result<Void> updateStatus(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
         consoleService.updateStatus(id, Boolean.TRUE.equals(body.get("enabled")));
         return Result.ok();
     }
 
     @PostMapping("/users/{id}/reset-password")
+    @AuditLog(module = "console-user", action = "reset-password", targetType = "user", ignoreParams = true)
     public Result<ConsoleVO.ResetResult> resetPassword(@PathVariable Long id) {
         return Result.ok(consoleService.resetPassword(id));
     }
 
     @DeleteMapping("/users/{id}")
+    @AuditLog(module = "console-user", action = "delete", targetType = "user")
     public Result<Void> deleteUser(@PathVariable Long id) {
         consoleService.deleteUser(id);
         return Result.ok();
@@ -85,6 +90,7 @@ public class ConsoleController {
     }
 
     @PutMapping("/config")
+    @AuditLog(module = "console-config", action = "update", targetType = "config")
     public Result<List<ConsoleVO.ConfigItem>> updateConfig(@RequestBody Map<String, String> body) {
         return Result.ok(consoleService.updateConfig(body));
     }
@@ -99,7 +105,10 @@ public class ConsoleController {
     @GetMapping("/logs/oper")
     public Result<PageResult<ConsoleVO.OperLog>> operLogs(
             @RequestParam(defaultValue = "1") long page,
-            @RequestParam(defaultValue = "20") long size) {
-        return Result.ok(consoleService.operLogs(Math.max(page, 1), Math.min(size, 100)));
+            @RequestParam(defaultValue = "20") long size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String result) {
+        return Result.ok(consoleService.operLogs(Math.max(page, 1),
+                Math.min(Math.max(size, 1), 100), keyword, result));
     }
 }

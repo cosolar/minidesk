@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 导航链接（工作工具 / 学习资源）。
+ * 导航链接（工作书签 / 学习资源）。
  */
 @Service
 public class NavLinkService {

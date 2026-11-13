@@ -12,10 +12,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 全局异常处理：对外只暴露 code + message + traceId，堆栈只进日志。
@@ -56,6 +62,26 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DisableServiceException.class)
     public ResponseEntity<Result<Void>> handleDisabled(DisableServiceException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Result.error(ErrorCode.ACCOUNT_DISABLED));
+    }
+
+    /** 静态资源或接口不存在：单 Jar 模式下尤其要区分 404 与真正的服务端错误 */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<Result<Void>> handleNotFound(Exception ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Result.error(ErrorCode.NOT_FOUND));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Result<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(Result.error(ErrorCode.PARAM_ERROR, "请求方法不支持"));
+    }
+
+    @ExceptionHandler({HttpMessageNotReadableException.class,
+            MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Result<Void>> handleBadRequest(Exception ex) {
+        log.debug("bad request: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(Result.error(ErrorCode.PARAM_ERROR, "请求参数不合法"));
     }
 
     @ExceptionHandler(Exception.class)

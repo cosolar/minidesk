@@ -36,6 +36,7 @@ public class SchemaUpgrade implements ApplicationRunner {
         }
         ensureColumn("task", "start_date", "DATE");
         ensureColumn("task", "start_time", "VARCHAR(8)");
+        ensureColumn("job_exec_log", "message", "VARCHAR(500)");
     }
 
     private boolean isSqlite() {

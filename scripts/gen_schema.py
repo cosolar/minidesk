@@ -171,8 +171,11 @@ for dialect, filename in (("mysql", "schema-mysql.sql"), ("pg", "schema-postgres
     target.write_text(render(dialect), encoding="utf-8")
     print(f"wrote {target.name}: {len(tables)} tables, {len(indexes)} indexes")
 
-# sanity checks
-assert len(tables) == 59, f"unexpected table count: {len(tables)}"
+# sanity checks: table count follows the SQLite source, no hard-coded number
+assert len(tables) == text.count("CREATE TABLE IF NOT EXISTS"), (
+    f"parsed {len(tables)} tables but source declares "
+    f"{text.count('CREATE TABLE IF NOT EXISTS')}"
+)
 assert all(i["table"] in tables for i in indexes), "index references unknown table"
 for dialect, filename in (("mysql", "schema-mysql.sql"), ("pg", "schema-postgresql.sql")):
     out = (DB_DIR / filename).read_text(encoding="utf-8")

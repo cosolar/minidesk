@@ -23,6 +23,7 @@ public class UserTenantHandler implements TenantLineHandler {
             "sys_config",
             "sys_login_log",
             "sys_oper_log",
+            "sys_schedule_job",
             "job_exec_log",
             "backup_record",
             "qrtz_job_details",

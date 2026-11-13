@@ -1,6 +1,7 @@
 package cn.minims.desk.modules.auth.controller;
 
 import cn.minims.desk.common.api.Result;
+import cn.minims.desk.framework.audit.AuditLog;
 import cn.minims.desk.modules.auth.dto.EmailRegisterDTO;
 import cn.minims.desk.modules.auth.dto.LoginDTO;
 import cn.minims.desk.modules.auth.dto.RegisterDTO;
@@ -33,11 +34,13 @@ public class AuthController {
     }
 
     @PostMapping("/login")
+    @AuditLog(module = "auth", action = "login", ignoreParams = true)
     public Result<LoginVO> login(@Valid @RequestBody LoginDTO dto, HttpServletRequest request) {
         return Result.ok(authService.login(dto, resolveIp(request), request.getHeader("User-Agent")));
     }
 
     @PostMapping("/register")
+    @AuditLog(module = "auth", action = "register", ignoreParams = true)
     public Result<LoginVO> register(@Valid @RequestBody RegisterDTO dto, HttpServletRequest request) {
         return Result.ok(authService.register(dto, resolveIp(request), request.getHeader("User-Agent")));
     }

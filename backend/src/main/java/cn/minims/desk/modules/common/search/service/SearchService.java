@@ -106,7 +106,7 @@ public class SearchService {
 
         add(groups, "nav", "导航", query(userId,
                 "select id, title, coalesce(description, url) as body, "
-                        + "case when module = 'study' then '学习资源' else '工作工具' end as meta "
+                        + "case when module = 'study' then '学习资源' else '工作书签' end as meta "
                         + "from nav_link where user_id = ? and deleted = 0 "
                         + "and (title like ? or description like ? or url like ?) limit " + PER_GROUP,
                 like, like, like), "/work/tool");

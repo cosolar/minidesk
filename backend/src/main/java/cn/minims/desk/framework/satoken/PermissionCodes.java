@@ -19,7 +19,7 @@ public final class PermissionCodes {
     public static final String WORK_DOC_MANAGE = "work:doc:manage";
     public static final String WORK_MEETING_MANAGE = "work:meeting:manage";
 
-    /** 导航链接：工作「工具」与学习「资源」共用 */
+    /** 导航链接：工作「书签」与学习「资源」共用 */
     public static final String SHARED_NAV_MANAGE = "shared:nav:manage";
     public static final String SHARED_CALENDAR_MANAGE = "shared:calendar:manage";
 

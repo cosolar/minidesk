@@ -167,6 +167,7 @@ CREATE TABLE IF NOT EXISTS job_exec_log (
   finished_at DATETIME,
   success     TINYINT     NOT NULL DEFAULT 1,
   cost_ms     BIGINT,
+  message     VARCHAR(500),                        -- 执行结果摘要
   error_msg   VARCHAR(1000),
   trigger_by  VARCHAR(16) DEFAULT 'cron'           -- cron/manual
 );
@@ -916,3 +917,24 @@ CREATE TABLE IF NOT EXISTS photo (
 );
 
 CREATE INDEX IF NOT EXISTS idx_photo_album ON photo(album_id, sort_order);
+
+-- 定时任务定义：Quartz 的 trigger 在内存中，配置与执行历史持久化在此，重启自动重建
+CREATE TABLE IF NOT EXISTS sys_schedule_job (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  job_code     VARCHAR(64)  NOT NULL,
+  job_name     VARCHAR(100) NOT NULL,
+  description  VARCHAR(255),
+  cron_expr    VARCHAR(64)  NOT NULL,
+  enabled      TINYINT      NOT NULL DEFAULT 1,
+  allow_manual TINYINT      NOT NULL DEFAULT 1,
+  sort_order   INTEGER      NOT NULL DEFAULT 0,
+  last_run_at  DATETIME,
+  last_status  VARCHAR(16),
+  last_cost_ms BIGINT,
+  last_error   VARCHAR(500),
+  next_run_at  DATETIME,
+  created_at   DATETIME     NOT NULL,
+  updated_at   DATETIME     NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_schedule_job ON sys_schedule_job(job_code);
