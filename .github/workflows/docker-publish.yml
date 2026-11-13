@@ -146,6 +146,30 @@ jobs:
             docker buildx imagetools create --tag "$GHCR_IMAGE:$tag" "$src"
           done
 
+      # 让镜像包可被匿名拉取：部署服务器往往没有 GitHub 凭据。
+      - name: Make the ghcr package pullable
+        if: env.PUSH_IMAGE == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_NAME: ${{ github.repository_owner }}/minidesk
+        run: |
+          code=$(curl -sS -o /tmp/visibility.json -w '%{http_code}' -X PUT \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/user/packages/container/$PACKAGE_NAME/visibility" \
+            -d '{"visibility":"public"}')
+          echo "visibility api: $code"
+          head -c 300 /tmp/visibility.json; echo
+          if [ "$code" != "204" ] && [ "$code" != "200" ]; then
+            curl -sS -X PATCH \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/user/packages/container/$PACKAGE_NAME" \
+              -d '{"visibility":"public"}' | head -c 300; echo
+          fi
+
       - name: Summarize
         run: |
           if [ "$PUSH_IMAGE" = "true" ]; then
@@ -205,7 +229,7 @@ jobs:
             NPM_REGISTRY=https://registry.npmjs.org
           cache-from: type=gha
 
-      - name: Ship the image to the server
+      - name: Prepare the ssh key on the runner
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
@@ -215,18 +239,43 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+
+      # 首选让服务器直接从 ghcr.io 拉：走 GitHub 的 CDN，境内速度远好于
+      # 从境外 runner 传 300MB 归档。拉不到时才回退到打包传输。
+      - name: Pull the image on the server
+        id: pull
+        run: |
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "REPO='${{ github.repository }}'; VER='${{ steps.ver.outputs.version }}'; \
+             if docker pull ghcr.io/\$REPO:\$VER; then SRC=ghcr.io/\$REPO:\$VER; \
+             else docker pull ghcr.io/\$REPO:latest && SRC=ghcr.io/\$REPO:latest; fi; \
+             docker tag \$SRC minimscn/minidesk:latest; \
+             docker tag \$SRC minimscn/minidesk:\$VER; \
+             echo 'pulled='\$SRC" \
+            && echo "pulled=true" >> "$GITHUB_OUTPUT" \
+            || echo "pulled=false" >> "$GITHUB_OUTPUT"
+
+      - name: Ship the image archive as a fallback
+        if: steps.pull.outputs.pulled != 'true'
+        run: |
           docker save minimscn/minidesk:latest minimscn/minidesk:${{ steps.ver.outputs.version }} \
             | gzip -1 > minidesk-image.tar.gz
           echo "image archive: $(du -h minidesk-image.tar.gz | cut -f1)"
           scp -P "$DEPLOY_PORT" -o StrictHostKeyChecking=yes \
             minidesk-image.tar.gz deploy/deploy.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:/tmp/"
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash /tmp/deploy.sh /tmp/minidesk-image.tar.gz '$DEPLOY_PATH'"
 
       - name: Roll the container on the server
         run: |
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash /tmp/deploy.sh /tmp/minidesk-image.tar.gz '$DEPLOY_PATH'"
+            "cd '$DEPLOY_PATH' && \
+             docker compose -f deploy/docker-compose.yml up -d --force-recreate --pull never && \
+             docker compose -f deploy/docker-compose.yml ps"
 
       - name: Verify the deployment
         run: |
