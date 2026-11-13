@@ -40,6 +40,7 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: docker-publish-${{ github.ref }}
@@ -127,10 +128,29 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # 部署服务器常在内网，直连 Docker Hub 被阻断或极慢；把同一份镜像同步到
+      # GitHub Container Registry（按 digest 一致，不用重新构建），部署方改拉
+      # ghcr.io/cosolar/minidesk:<tag> 即可。
+      - name: Mirror image to GitHub Container Registry
+        if: env.PUSH_IMAGE == 'true'
+        env:
+          GHCR_IMAGE: ghcr.io/${{ github.repository }}
+          SOURCE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
+          echo "$SOURCE_TAGS" | tr ',' '\n' | while read -r src; do
+            [ -z "$src" ] && continue
+            tag="${src##*:}"
+            echo "mirroring $src -> $GHCR_IMAGE:$tag"
+            docker buildx imagetools create --tag "$GHCR_IMAGE:$tag" "$src"
+          done
+
       - name: Summarize
         run: |
           if [ "$PUSH_IMAGE" = "true" ]; then
             echo "已推送镜像：$IMAGE_NAME（tag 见上方 Build and push 输出）" >> "$GITHUB_STEP_SUMMARY"
+            echo "已同步镜像：ghcr.io/${{ github.repository }}（内网服务器可从此拉取）" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "仅验证构建，未推送。镜像名预留：$IMAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
           fi
