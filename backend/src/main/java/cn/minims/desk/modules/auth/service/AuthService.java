@@ -126,6 +126,7 @@ public class AuthService {
         if (!dto.password().equals(dto.confirmPassword())) {
             throw new BizException(ErrorCode.PARAM_ERROR, "两次输入的密码不一致");
         }
+        checkPasswordLength(dto.password());
 
         String username = dto.username().trim();
         String now = LocalDateTime.now().format(DATETIME);
@@ -179,7 +180,7 @@ public class AuthService {
                     firstUser,
                     needClaim,
                     mailConfigService.isReady(),
-                    new RegisterConfigVO.PasswordPolicy(8, true, true));
+                    new RegisterConfigVO.PasswordPolicy(passwordMinLength(), false, false));
         });
     }
 
@@ -218,6 +219,25 @@ public class AuthService {
     private boolean isRegisterAllowed() {
         String value = configMapper.selectValue("allow_register");
         return !"false".equalsIgnoreCase(value);
+    }
+
+    /** 密码最小长度取自系统配置，配置缺失或非法时回落到 8 位 */
+    private int passwordMinLength() {
+        String value = configMapper.selectValue("password_min_length");
+        try {
+            int parsed = Integer.parseInt(StrUtil.trim(value));
+            return parsed >= 4 ? parsed : 8;
+        } catch (NumberFormatException | NullPointerException ex) {
+            return 8;
+        }
+    }
+
+    /** 与前端展示的口径保持一致：密码长度不足时给出明确原因 */
+    private void checkPasswordLength(String password) {
+        int minLength = passwordMinLength();
+        if (password == null || password.length() < minLength) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "密码至少 " + minLength + " 位");
+        }
     }
 
     private SysUserDO findByUsername(String username) {
@@ -272,6 +292,7 @@ public class AuthService {
         if (!dto.password().equals(dto.confirmPassword())) {
             throw new BizException(ErrorCode.PARAM_ERROR, "两次输入的密码不一致");
         }
+        checkPasswordLength(dto.password());
         String email = dto.email().trim().toLowerCase(Locale.ROOT);
 
         return TenantContext.ignore(() -> {
