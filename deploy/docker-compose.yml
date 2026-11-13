@@ -1,0 +1,39 @@
+# MiniDesk 官方单镜像快速部署：前端 + 后端 + SQLite 全在一个容器里。
+#
+#   1) 准备必填变量（不要用默认密钥上公网）
+#        export SA_TOKEN_SECRET="$(openssl rand -hex 32)"
+#        export MINIDESK_CLAIM_TOKEN='换成自定义令牌'
+#   2) 启动
+#        docker compose -f deploy/docker-compose.yml up -d
+#   3) 打开 http://服务器IP:18080 注册，第一个注册者成为管理员
+#
+# 容器固定监听 18080；MINIDESK_PORT 只改宿主侧映射端口。
+# 反向代理（HTTPS、域名）建议放在容器外：Nginx / Caddy 把请求转到 18080 即可，
+# 页面在 /、接口在 /api，不需要剥路径前缀。
+
+name: minidesk
+
+services:
+  minidesk:
+    image: ${MINIDESK_IMAGE:-minimscn/minidesk:latest}
+    container_name: minidesk
+    restart: unless-stopped
+    ports:
+      # 只想让本机反代访问时改成 "127.0.0.1:${MINIDESK_PORT:-18080}:18080"
+      - "${MINIDESK_PORT:-18080}:18080"
+    environment:
+      TZ: Asia/Shanghai
+      SA_TOKEN_SECRET: ${SA_TOKEN_SECRET:?请先设置 SA_TOKEN_SECRET（至少 32 字符随机串）}
+      # 公网部署务必设置：首个注册者必须填写正确令牌才能领取管理员
+      MINIDESK_CLAIM_TOKEN: ${MINIDESK_CLAIM_TOKEN:-}
+      # 主库、.secret、uploads/、branding/、backups/、恢复包都跟随这个目录
+      MINIDESK_DATA_DIR: /data
+      # 不要设置 SPRING_DATASOURCE_URL：主库 URL 已跟随 MINIDESK_DATA_DIR，
+      # 单独覆盖会让「数据目录」与「数据库文件」两处配置分叉。
+    volumes:
+      - minidesk-data:/data
+    # JVM 堆 = 内存上限 × 0.75（entrypoint 里的 MaxRAMPercentage=75）
+    mem_limit: ${APP_MEMORY_LIMIT:-1g}
+
+volumes:
+  minidesk-data:

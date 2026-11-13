@@ -1,0 +1,136 @@
+name: Publish Docker image
+
+# 发布官方单镜像到 Docker Hub：<DOCKERHUB_USERNAME>/minidesk
+#
+# 触发方式：
+#   1) 打 tag 并推送：git tag v0.1.0 && git push origin v0.1.0  → 构建并推送 0.1.0 / 0.1 / latest
+#   2) 在 Actions 页面手动 Run workflow（可关掉 push 只验证构建，也可填版本号）
+#   3) 改动源码 / Dockerfile / deploy / 本工作流并推到 main          → 只验证构建，不推送
+#      注：GitHub 对 tag 推送不评估 paths 过滤，所以打 tag 一定触发。
+#
+# 仓库需要配置两个 Secrets（Settings → Secrets and variables → Actions）：
+#   DOCKERHUB_USERNAME  Docker Hub 用户名
+#   DOCKERHUB_TOKEN     Docker Hub Access Token（不是登录密码）
+# 未配置时，推送任务会在「检查凭据」这一步带着明确提示失败，而不是卡在登录。
+#
+# 镜像内容见仓库根 Dockerfile：多阶段构建 Vue 3 前端与 Spring Boot 单 Jar，
+# 运行镜像只有一个 Java 进程，默认 SQLite，数据卷 /data。
+
+on:
+  push:
+    tags: ['v*']
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'deploy/**'
+      - 'frontend/**'
+      - 'backend/**'
+      - '.github/workflows/docker-publish.yml'
+  workflow_dispatch:
+    inputs:
+      push:
+        description: '推送到 Docker Hub（关闭则只验证构建）'
+        type: boolean
+        default: true
+      version:
+        description: '版本号（如 0.1.0）。填写时额外推送 0.1.0 / 0.1；留空只推 latest'
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      # 只在「推版本 tag」或「手动勾选推送」时真正发布；main 上的构建与手动关闭推送时只验证。
+      PUSH_IMAGE: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && inputs.push) }}
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME || 'minimscn' }}/minidesk
+    steps:
+      - uses: actions/checkout@v4
+
+      # 不在这里重复跑构建与检查：Dockerfile 自己会构建前端、编译后端，
+      # 并在打包后校验 jar 内确实含有 static/index.html。
+      - uses: docker/setup-buildx-action@v3
+
+      # 缺少 Secrets 时给出可执行的提示，而不是让 login-action 报一句
+      # 「Username and password required」，让人分不清是没配还是配错了。
+      - name: Check Docker Hub credentials
+        if: env.PUSH_IMAGE == 'true'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          missing=""
+          [ -n "$DOCKERHUB_USERNAME" ] || missing="DOCKERHUB_USERNAME"
+          [ -n "$DOCKERHUB_TOKEN" ] || missing="$missing DOCKERHUB_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::缺少仓库 Secrets：$missing。请在 Settings → Secrets and variables → Actions 中添加：DOCKERHUB_USERNAME（用户名）、DOCKERHUB_TOKEN（Docker Hub Access Token，需 Read & Write 权限）。添加后重新运行本工作流。"
+            exit 1
+          fi
+          echo "Docker Hub 凭据已配置（用户名：$DOCKERHUB_USERNAME）"
+
+      - name: Log in to Docker Hub
+        if: env.PUSH_IMAGE == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # semver 标签只能从 refs/tags/v* 推出来；手动运行没有 tag，
+      # 所以允许显式填版本号，否则只会得到 latest。
+      - name: Resolve manual version
+        id: ver
+        if: github.event_name == 'workflow_dispatch' && inputs.version != ''
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          v="${INPUT_VERSION#v}"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          case "$v" in
+            *.*.*) echo "minor=${v%.*}" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.ver.outputs.version }},enable=${{ steps.ver.outputs.version != '' }}
+            type=raw,value=${{ steps.ver.outputs.minor }},enable=${{ steps.ver.outputs.minor != '' }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          # 纯 Java + 静态资源；与现有生产服务器架构一致，先只发 amd64。
+          # 需要 Apple Silicon / ARM 服务器时改成 linux/amd64,linux/arm64。
+          platforms: linux/amd64
+          push: ${{ env.PUSH_IMAGE == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # 构建机在海外：lockfile 里的 npmmirror 换回官方源，Maven 直连 Central。
+          build-args: |
+            NPM_REGISTRY=https://registry.npmjs.org
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summarize
+        run: |
+          if [ "$PUSH_IMAGE" = "true" ]; then
+            echo "已推送镜像：$IMAGE_NAME（tag 见上方 Build and push 输出）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "仅验证构建，未推送。镜像名预留：$IMAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
+          fi
