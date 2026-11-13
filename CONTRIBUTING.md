@@ -28,6 +28,12 @@ npm run build          # 类型检查 + 生产构建
 cd backend
 mvn test               # 单元测试（当前用例较少）
 mvn -DskipTests package
+
+# 单 Jar（仓库根目录，会先构建前端）
+python scripts/build_single_jar.py
+
+# 端到端冒烟（对已启动的实例；密码只从环境变量读，不要写进仓库）
+MINIDESK_ADMIN_PASSWORD='...' python scripts/smoke_test.py
 ```
 
 `AGENTS.md` 里列出的 p3c-pmd / Spotless / SpotBugs / ArchUnit / JaCoCo / ESLint 等静态检查尚未全部接入构建脚本，属于后续质量门禁建设内容；在接入之前，请人工遵守对应的编码约定。
@@ -63,7 +69,9 @@ mvn -DskipTests package
 
 以 `schema-sqlite.sql` 为源头，改完后在仓库根目录运行 `python scripts/gen_schema.py`（仅依赖 Python 标准库）重新生成另外两套，不要手工逐条维护。
 
-新字段除了改三套 `CREATE TABLE`，还要在 `SchemaUpgrade` 里加**幂等**的 `ALTER`（先判断列是否存在），保证老数据库能平滑升级。表结构变化同步更新 [docs/数据库设计.md](docs/数据库设计.md)，接口变化同步更新 [docs/接口清单.md](docs/接口清单.md)。
+新字段除了改三套 `CREATE TABLE`，还要在 `SchemaUpgrade` 里加**幂等**的 `ALTER`（先判断列是否存在），保证老数据库能平滑升级。`scripts/gen_schema.py` 的表数校验跟随 SQLite 源文件，不需要改硬编码数字。表结构变化同步更新 [docs/数据库设计.md](docs/数据库设计.md)，接口变化同步更新 [docs/接口清单.md](docs/接口清单.md)。
+
+新增定时任务时：在 `ScheduleService.DEFAULTS` 加定义、在 `ScheduleTaskRunner.dispatch` 加分支，业务 SQL 必须显式带 `user_id` 且不依赖登录态；跨用户写入用 `jdbc.batchUpdate`，不要循环单条插入。改动后到 `/console/jobs` 手动触发一次并核对执行日志。
 
 ## 提交信息
 

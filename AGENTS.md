@@ -8,9 +8,9 @@
 
 ## 1. 项目一句话
 
-MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活三大板块 + 首页看板。当前交付形态是 **Web（PC 优先，窄屏自适应）**，Tauri 桌面端与移动端专属导航在路线图中；另有一套**独立的管理后台**（`/console`，管理员登录直达，界面与用户端不同）。
+MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活三大板块 + 首页看板。当前交付形态是 **Web（PC 优先，窄屏有专属底部导航）**，也能打成内置前端的单 Jar；Tauri 桌面端仍在路线图中。另有一套**独立的管理后台**（`/console`，管理员登录直达，界面与用户端不同）。
 
-**当前状态**（2026-11-12，v0.1.0）：统一入口 3 个、板块页 14 个、隐藏入口 4 个、管理后台 1 套；五套主题、59 张表、三套建表 SQL，开源文档已补齐。
+**当前状态**（2026-11-13，v0.1.0+）：统一入口 3 个、板块页 14 个、隐藏入口 4 个、管理后台 1 套；五套主题、60 张表、三套建表 SQL；Quartz 调度、备份恢复、审计 AOP、单 Jar 与移动端 TabBar 已落地，开源文档已补齐。
 
 > 开源交付说明见 [README.md](README.md)、[docs/README.md](docs/README.md) 与 [CHANGELOG.md](CHANGELOG.md)。设计总纲里标注「规划」「排期」「待确认」的章节不代表已实现。
 
@@ -20,14 +20,20 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
   - 全局搜索 `/search` ← 顶栏搜索框 / Ctrl+K
   - 数据统计 `/stats` ← 工作台「数据概览」下钻
 - ✅ 工作台 `/`：Hero + 快速入口 + 三张模块卡 + 四个组件 + **数据概览**（效率/学习/收支）
-- ✅ 工作：项目、日志、资产、工具、会议纪要
+- ✅ 工作：项目、日志、资产、书签、会议纪要
 - ✅ 学习：知识库、计划、打卡、资源
 - ✅ 生活：记账、纪念日、日记、相册、联系人
 - ✅ 管理后台 `/console`：用户、站点配置、**品牌设置**（站点名 + 方形/横版 logo）、**发件邮箱（SMTP）**、审计
 - ✅ 个人中心 `/profile`：头像上传、昵称/邮箱、修改密码（顶栏头像进入）
 - ✅ 账号：用户名注册 + **邮箱验证码注册**（后台配好 SMTP 才显示入口），登录支持用户名或邮箱
 - ✅ 侧栏：宽度可拖拽（184–320，双击复位）、可折叠，状态持久化
-- ⏳ 待做：Quartz、单 Jar、Tauri、备份恢复、审计 AOP
+- ✅ 定时任务 `/console/jobs`：Quartz 触发（RAMJobStore）+ `sys_schedule_job` 定义与 `job_exec_log` 历史；4 个内置任务、Cron 编辑、启停、立即执行
+- ✅ 备份恢复 `/console/backups`：`VACUUM INTO` 一致快照、ZIP 下载/上传、启动前 `RestoreBootstrap` 应用并回滚保护
+- ✅ 审计：`@AuditLog` + `AuditAspect` 自动记录所有写操作，参数脱敏
+- ✅ 单 Jar：`mvn -Psingle-jar package` / `scripts/build_single_jar.py`，`SpaFallbackConfig` 条件化转发前端路由
+- ✅ Docker：根 `Dockerfile` 多阶段单镜像、`deploy/` 入口与 compose、GitHub Actions 打 `v*` tag 发布 Docker Hub
+- ✅ 移动端：底部 5 项 TabBar，顶栏精简；后台侧栏窄屏转横向菜单
+- ⏳ 待做：Tauri、MySQL / PostgreSQL 运行时适配、自动化测试、逐页深度重设计、集群调度
 
 > **信息架构铁律**：同一个概念只能有一个入口。
 > 任务、日历、笔记天然跨板块，就做统一入口；不要因为「工作上常用」就在工作分组里再放一份。
@@ -42,7 +48,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 |---|---|---|
 | 1 | `README.md` / `docs/README.md` | 项目现状、文档索引、快速开始 |
 | 2 | `docs/MiniDesk开发文档.md` | 产品范围、功能矩阵、架构决策、排期 |
-| 3 | `docs/数据库设计.md` | 59 张表、字段、索引、三库策略 |
+| 3 | `docs/数据库设计.md` | 60 张表、字段、索引、三库策略 |
 | 4 | `docs/接口清单.md` | 接口契约、错误码、权限码 |
 | 5 | `docs/部署指南.md` | 本地开发、生产部署、备份与 FAQ |
 | 6 | 本文件 | 编码规范、工作流、验收标准 |
@@ -55,7 +61,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 
 ### 3.1 技术栈
 
-以下为 **当前 `package.json` / `pom.xml` 里真实存在**的依赖；设计总纲中提到的 Liquibase、Quartz、MapStruct、EasyExcel、ECharts、Tauri 等尚未接入，不要按它们写代码。
+以下为 **当前 `package.json` / `pom.xml` 里真实存在**的依赖；设计总纲中提到的 Liquibase、MapStruct、EasyExcel、ECharts、Tauri 等尚未接入，不要按它们写代码。Quartz 已接入，但用的是 RAMJobStore + 自建持久化表，不是设计文档里的 QRTZ_* JDBC JobStore 方案。
 
 ```
 前端  Vue 3.5 · TypeScript · Vite 8 · Element Plus 2 · Vue Router 4 · Pinia 2
@@ -64,6 +70,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 
 后端  JDK 17 · Spring Boot 3.5 · Spring Web / Validation / Cache / Mail
       MyBatis-Plus 3.5（含 jsqlparser） · Sa-Token 1.46（JWT 无状态）
+      Quartz 2.5（自建 Scheduler，已排除 Boot 自动配置） · AspectJ（审计切面）
       SQLite JDBC · Caffeine · Hutool · Lombok · jjwt
 
 数据  SQLite（运行时唯一数据源）；MySQL 8 / PostgreSQL 14 仅提供建表 SQL
@@ -79,8 +86,13 @@ minidesk/
 │  └─ src/{app,core,layouts,features,shared,styles,types}
 ├─ backend/               后端
 │  ├─ src/main/java/cn/minims/desk/{common,config,framework,bootstrap,modules}
+│  │  └─ modules/integration/minidocs/  知识库代理 client / service / controller / vo / config
 │  ├─ src/main/resources/db/  三套建表 SQL
 │  └─ data/              运行时数据（不入库）
+├─ scripts/                gen_schema.py（三库 DDL 同步）、build_single_jar.py、smoke_test.py
+├─ Dockerfile · .dockerignore
+├─ deploy/                 entrypoint.sh、docker-compose.yml
+├─ .github/workflows/      docker-publish.yml（打 tag 发布镜像）
 ├─ AGENTS.md · README.md · CONTRIBUTING.md · SECURITY.md
 ├─ CHANGELOG.md · LICENSE · .env.example
 └─ frontend/README.md · backend/README.md
@@ -108,6 +120,15 @@ mvn spring-boot:run -Dspring-boot.run.arguments="--server.port=18080"
 cd frontend && npm ci
 cd frontend && npm run typecheck && npm run build
 cd frontend && npm run preview    # 5180，serve dist 并代理 /api
+
+# 单 Jar（自动构建前端 + 打进后端 jar）
+python scripts/build_single_jar.py
+python scripts/build_single_jar.py --skip-frontend --offline   # 复用 dist、离线
+java -jar backend/target/minidesk.jar --server.port=18080
+
+# Docker 单镜像（多阶段构建；海外 runner 换官方 npm 源）
+docker build --build-arg NPM_REGISTRY=https://registry.npmjs.org -t minimscn/minidesk:local .
+docker compose -f deploy/docker-compose.yml up -d
 ```
 
 > 本机 5173 被另一个项目占用，前端固定 5180；`--server.port` 显式指定可避免环境变量 `PORT` 覆盖。
@@ -118,10 +139,29 @@ cd frontend && npm run preview    # 5180，serve dist 并代理 /api
 |---|---|---|
 | `SA_TOKEN_SECRET` | 生产必填 | JWT 签名密钥，≥ 32 字符；开发有默认值，生产必须替换 |
 | `MINIDESK_CLAIM_TOKEN` | 公网必填 | 首个注册者领取 ADMIN 时需填写的令牌，留空表示不校验 |
-| `SPRING_DATASOURCE_URL` | 否 | 默认 `jdbc:sqlite:./data/minidesk.db` |
+| `SPRING_DATASOURCE_URL` | 否 | 默认 `jdbc:sqlite:${minidesk.data-dir}/minidesk.db`；显式设置会与数据目录分叉，Docker 部署勿设 |
+| `MINIDESK_DATA_DIR` | 否 | 数据目录，默认 `./data`；主库与 `RestoreBootstrap` 都读它 |
+| `MINIDESK_MINIDOCS_TOKEN` | 否 | 知识库 `mdt_` 令牌；仅在首次启动、且尚无任何用户配置过时加密导入 |
 | `VITE_API_BASE` | 否 | 前端构建期接口前缀，默认 `/api`；`VITE_*` 禁止放密钥 |
 
-天气 Key、SMTP 凭据、站点品牌**存数据库**（加密 / 掩码），不是环境变量。集成加密主密钥首次启动自动生成到 `backend/data/.secret`，务必随库一起备份。清单见 [`.env.example`](.env.example)。
+天气 Key、知识库访问令牌、SMTP 凭据、站点品牌**存数据库**（加密 / 掩码），不是环境变量；
+`MINIDESK_MINIDOCS_TOKEN` 只是首次导入入口，导入后同样落库。集成加密主密钥首次启动自动
+生成到 `backend/data/.secret`，务必随库一起备份。清单见 [`.env.example`](.env.example)。
+
+### 3.6 知识库代理约定
+
+| 项 | 约定 |
+|---|---|
+| 上游 | `https://docs.minims.cn/api`（可配置），`Authorization: Bearer mdt_…`，信封 `{code,message,data}` |
+| 两条链路 | `mine` → `/console/{org}/...`（需令牌，含私有库）；`public` → `/portal/...`（匿名、仅已发布） |
+| 组织 | `org` 从 `GET /tenants/mine` 取，URL 路径段必须逐段编码（中文库名常见） |
+| 搜索 | 上游 `/api/search` 是匿名白名单，带令牌也不扩大可见范围；基于 `/tree` 做本地匹配 |
+| 写入 | 需 `read,write` 令牌；`POST /doc` body 为 `{path, content}`，路径禁止 `..` |
+| 错误码 | `60060` 未配置 / 未启用、`60061` 令牌无效、`60062` 上游失败、`60063` 只读令牌 |
+| 缓存 | 正文不缓存；目录树缓存 5 分钟；写操作后 `invalidateAll()` |
+
+令牌明文不进日志、不回前端；`AuditAspect` 对 `/api/kb/docs` 用 `ignoreParams = true`，
+避免把整篇 Markdown 写进 `sys_oper_log`。接口契约见 [接口清单 §10](docs/接口清单.md)。
 
 ---
 
@@ -136,6 +176,10 @@ cd frontend && npm run preview    # 5180，serve dist 并代理 /api
    （`target/*.jar`、`dist/index.html`），可疑就前台重跑。
 5. 外部 HTTPS 走本机代理，`Tunnel connection failed: 502` 是代理问题，不是代码问题。
 6. 删文件走回收站工具，不用 `rm -rf`。
+7. **Spring Boot 的 `QuartzAutoConfiguration` 必须排除**：项目自己装配 Scheduler，
+   否则启动时会出现两个 `Scheduler` bean 导致 `NoUniqueBeanDefinitionException`。
+8. 备份记录要**先于** `VACUUM INTO` 落库，否则快照里少一条记录，恢复后与磁盘文件对不上；
+   恢复包只在 `main()` 里、连接池建立之前应用。
 
 ---
 
@@ -316,17 +360,32 @@ const emit = defineEmits<{ toggle: [id: string, done: boolean] }>()
 
 ## 9. 质量门禁
 
-提交前必须全绿，缺一不可：
+**当前实际可跑的门禁**（提交前必须全绿）：
 
 ```bash
-# 前端
+# 前端：类型检查 + 生产构建
+cd frontend && npm run typecheck && npm run build
+
+# 后端：编译 + 可执行 Jar（校验 target/minidesk.jar 真实存在）
+cd backend && mvn -q -DskipTests package
+
+# 改过 db/schema-sqlite.sql 时，重新生成并校验三套 DDL
+python scripts/gen_schema.py
+
+# 改动涉及前端静态资源 / 路由时，验证单 Jar 能打包
+python scripts/build_single_jar.py --skip-frontend
+
+# 改动 Dockerfile / deploy / 工作流时（需要本机 Docker daemon，可选）
+docker build -t minidesk:verify .
+```
+
+以下静态检查尚未接入构建脚本，属于后续质量门禁建设内容；在接入之前请人工遵守对应约定：
+
+```bash
 pnpm lint           # 0 error / 0 warning
-pnpm typecheck      # vue-tsc，0 error
 pnpm test           # Vitest
 pnpm format:check   # Prettier 无 diff
-
-# 后端
-mvn -q verify       # 含 pmd(p3c) / spotless / spotbugs / 单测 / JaCoCo
+mvn -q verify       # pmd(p3c) / spotless / spotbugs / JaCoCo
 ```
 
 | 门禁 | 阈值 |
@@ -368,9 +427,8 @@ mvn -q verify       # 含 pmd(p3c) / spotless / spotbugs / 单测 / JaCoCo
 
 ### 10.2 绝对禁止
 
-- ✗ 任何 AI 署名或工具水印：`Co-authored-by: Claude/Cursor/Codex/...`、`Generated with ...`、
-  `🤖` 标记、"由 AI 生成/辅助"字样
-- ✗ commit body 里写"本次由助手完成"之类元叙述
+- ✗ 提交信息里附加任何第三方署名、工具水印或生成标记
+- ✗ commit body 里写与改动无关的元叙述
 - ✗ 一次提交混入多个不相关改动（重构与功能分开提交）
 - ✗ 提交 `data/`、`target/`、`node_modules/`、`.env`、含密钥的文件
 - ✗ **未经用户确认自动 `commit` / `push` / 部署**
@@ -400,14 +458,16 @@ mvn -q verify       # 含 pmd(p3c) / spotless / spotbugs / 单测 / JaCoCo
 | 11 | 循环内查库 | 批量 `IN` |
 | 12 | `select *` | 显式列名 |
 | 13 | 密钥写进 yml / 代码 | 环境变量或加密入库 |
-| 14 | 日志打印密码/证件/Key | 脱敏 |
+| 14 | 日志打印密码/证件/Key，或把 MyBatis `log-impl` 设成 stdout | 按字段名脱敏；生产用 `NoLoggingImpl`，避免加密凭据整行进日志 |
 | 15 | 未经确认 commit / push | 先汇报等确认 |
 | 16 | commit 带 AI 署名 | 纯英文 Conventional Commits |
 | 17 | 后台页面复用首页 `ModuleCard` / `AppGrid` | 后台用 Element Table / Form / Descriptions |
 | 18 | console 接口返回用户笔记/日记正文 | 只返回 `count` 统计 |
-| 19 | 后台接口漏 `@OperLog` | 所有写操作必须审计 |
+| 19 | 在 Controller 里手写审计日志 | 由 `AuditAspect` 自动埋点，需要精确命名才加 `@AuditLog` |
 | 20 | 允许删除/禁用最后一个 ADMIN | 事务内 count 校验，拒绝并提示 |
 | 21 | 用前端传参决定注册者角色 | 后端查 `sys_user` + `install_claimed` 抢占 |
+| 22 | 前端直连第三方 API / 把 `mdt_` 令牌传到浏览器 | 走 `modules/integration/minidocs` 后端代理，令牌只在服务端解密 |
+| 23 | 缓存知识库正文 | 正文实时取；只缓存目录树（5 分钟），写后失效 |
 
 ---
 

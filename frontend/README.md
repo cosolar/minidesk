@@ -35,10 +35,10 @@ src/
 ├── core/           # http 客户端、Pinia stores、主题目录
 │   ├── stores/     # app（主题 / 侧栏）、user、site（品牌）
 │   └── theme/      # catalog.ts：五套主题元信息
-├── layouts/        # 主布局、后台 Console 布局与顶栏 / 侧栏组件
+├── layouts/        # 主布局、后台 Console 布局、顶栏 / 侧栏 / 移动端 TabBar
 ├── features/       # 按业务域组织页面
 │   ├── dashboard/  # 工作台首页
-│   ├── work/ study/ life/   # 三大板块
+│   ├── work/ study/ life/   # 三大板块（study/kb 为知识库代理页面）
 │   ├── calendar/ note/ stats/ common/  # 统一中心
 │   ├── auth/ profile/ settings/ console/
 │   └── misc/       # 占位与兜底页
@@ -55,8 +55,10 @@ src/
 - **服务端数据用 Vue Query**：查询、变更、缓存失效都在 `useQuery` / `useMutation` 里；Pinia 只存 UI 状态（主题、侧栏折叠 / 宽度、站点品牌），不要把接口响应塞进 store。
 - **菜单单一来源**：`app/router/nav.ts` 定义 `unifiedNav` / `navGroups` / `hiddenNav` / `legacyRedirects`，侧栏与顶栏都从这里读。新增页面先判断是否应收敛进已有统一入口，旧路径必须保留 redirect。
 - **主题**：色值只在 `styles/theme.scss` 的 `[data-theme=...]` 中定义，`core/theme/catalog.ts` 只放展示元信息与问候语。组件里不要硬编码品牌色，统一用 CSS 变量；Element Plus 主色由 `html[data-theme]` 覆盖。
-- **Markdown**：所有正文输入复用 `shared/components/MarkdownEditor.vue`（内部动态 import Vditor 与其 CSS），不要各自引入编辑器。
+- **Markdown**：所有正文输入复用 `shared/components/MarkdownEditor.vue`（内部动态 import Vditor 与其 CSS），不要各自引入编辑器；只读预览用 `Vditor.preview`，公开库的服务端 HTML 用 `vditor-reset` 容器渲染。
+- **知识库**：`features/study/kb/api.ts` 只调 `/api/kb/*` 代理，前端永远拿不到 `mdt_` 令牌；笔记页的「沉淀到知识库」复用同一 API。
 - **请求**：统一走 `core/http/client.ts`，自动带 `MiniDesk-Token`、拆解 `Result`、处理 401 与错误提示。
+- **窄屏**：`appStore.isMobile`（<768px）时侧栏换成抽屉、主内容底部留白，`layouts/components/MobileTabBar.vue` 提供 5 项底部导航；顶栏隐藏管理后台按钮，管理员可从主题弹层进入 `/console`。
 - **样式**：Sass 变量由 `vite.config.ts` 的 `additionalData` 全局注入，组件内可直接使用变量，不必逐个 `@use`。
 - **图标**：`@iconify/vue` 默认依赖在线图标 API，离线部署需准备本地图标集。
 
@@ -79,6 +81,9 @@ npm run typecheck
 npm run build
 ```
 
-`dist/` 交给 Nginx 托管，并把 `/api` 反代到后端；**必须配置 SPA fallback**（`try_files $uri $uri/ /index.html`），否则刷新子路由会 404。当前版本后端 Jar 不内置前端静态资源。
+`dist/` 交给 Nginx 托管，并把 `/api` 反代到后端；**必须配置 SPA fallback**（`try_files $uri $uri/ /index.html`），否则刷新子路由会 404。
+
+也可以用仓库根目录的 `python scripts/build_single_jar.py` 把 `dist/` 打进后端 Jar，
+由 Spring Boot 直接托管静态资源与前端路由（`-Psingle-jar` profile + `SpaFallbackConfig`）。
 
 编码规范、提交格式与质量门禁见 [AGENTS.md](../AGENTS.md) 与 [CONTRIBUTING.md](../CONTRIBUTING.md)。

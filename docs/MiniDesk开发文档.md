@@ -5,7 +5,7 @@
 > 上一版：v0.1（仅首页规划）
 > 配套文档：[数据库设计](./数据库设计.md) · [接口清单](./接口清单.md) · [部署指南](./部署指南.md)
 
-> **阅读提示**：本文是设计蓝图与决策记录，「排期」「待确认」「多端方案」「单 Jar」「Quartz」等章节描述的是目标形态，**不代表当前代码已实现**。当前状态以 [README.md](../README.md) 与 [CHANGELOG.md](../CHANGELOG.md) 为准，实际部署步骤以 [部署指南](./部署指南.md) 为准。
+> **阅读提示**：本文是设计蓝图与决策记录，「排期」「待确认」「多端方案」「Tauri」等章节描述的是目标形态，**不代表当前代码已实现**。单 Jar、Quartz 调度、备份恢复、审计 AOP 与移动端导航已落地，但实现方式与本文早期设想有差异（例如调度用 RAMJobStore + 自建表，不用 QRTZ_*）。当前状态以 [README.md](../README.md) 与 [CHANGELOG.md](../CHANGELOG.md) 为准，实际部署步骤以 [部署指南](./部署指南.md) 为准。
 
 ---
 
@@ -40,7 +40,7 @@
 ──────────────
 工作 ▾
   ├ 项目        ├ 日志        ├ 资产
-  ├ 工具        └ 会议纪要
+  ├ 书签        └ 会议纪要
 学习 ▾
   ├ 知识库      ├ 计划        ├ 打卡        └ 资源
 生活 ▾
@@ -117,7 +117,7 @@
 | 工作 | 项目 | `/work/project` |
 | 工作 | 日志 | `/work/journal` |
 | 工作 | 资产 | `/work/asset` |
-| 工作 | 工具 | `/work/tool` |
+| 工作 | 书签 | `/work/tool` |
 | 工作 | 会议纪要 | `/work/meeting` |
 | 学习 | 知识库 | `/study/kb` |
 | 学习 | 计划 | `/study/plan` |
@@ -169,7 +169,7 @@
 
 资产 ←── 外链飞书/腾讯 + 自建 Markdown + 上传附件
 
-工具 / 资源 ── 同一张 nav_link 表，module 区分
+书签 / 资源 ── 同一张 nav_link 表，module 区分
 
 记账 ←── 月度支出──→ 日志月报（自动带出金额）
 
@@ -251,11 +251,11 @@ router.beforeEach((to) => {
 | 系统监控 | `/console/system` | CPU/内存/磁盘/库大小/JVM/线程池（OSHI + Actuator） | `system:monitor:query` | P1 |
 | 定时任务 | `/console/jobs` | 任务列表、立即执行、暂停/恢复、执行日志 | `system:job:manage` | P1 |
 | 备份恢复 | `/console/backup` | 全库备份、下载、恢复、保留策略 | `system:backup:manage` | P1 |
-| 集成配置 | `/console/integrations` | 全局默认天气 Key / 知识库地址与 PAT（用户未配置时回退） | `system:integration:update` | P2 |
+| 集成配置 | `/console/integrations` | 全局默认天气 Key / 知识库地址与 mdt_ 令牌（用户未配置时回退） | `system:integration:update` | P2 |
 | 审计日志 | `/console/audit` | 操作日志、登录日志、失败登录告警 | `system:audit:query` | P1 |
 | 系统设置 | `/console/settings` | 站点名、是否开放注册、密码策略、登录失败锁定阈值 | `system:setting:update` | P2 |
 
-> 全局集成配置用 `integration_config.user_id = 0` 表示「全局默认」，业务读取时先查用户自己的，没有则回退 `user_id = 0`，再没有才走 Mock。
+> 以上是早期蓝图。当前实现是 `integration_config` **按用户隔离**（租户插件注入 `user_id`），没有 `user_id = 0` 的全局回退；天气在设置页按人配置，知识库令牌同理，另提供 `MINIDESK_MINIDOCS_TOKEN` 作为首次启动导入入口，见 §5.8。
 
 ### 4.3 用户管理（后台的核心页）
 
@@ -465,21 +465,32 @@ flowchart LR
 
 聚合四类数据按时间倒序分页：`life_log`（心情/生活记录）、`trip`（旅行）、`anniversary`（纪念日）、`note(type=diary)`。统一为 `TimelineItemVo { date, type, title, summary, cover, id }`。分页用游标（`before_date`）而非 offset，避免插入新数据导致翻页重复。
 
-### 5.8 知识库对接 minidocs
+### 5.8 知识库对接 MiniDocs
 
-已有系统：Halo + MiniDocs 插件，站点 `docs.minims.cn`，Console API `console.api.minidocs.halo.run/v1alpha1`，认证用 Halo 个人访问令牌（PAT，Bearer）。
+> 本节已按 2026-11 的线上实际契约重写。早期设想里的 Halo Console API
+> （`console.api.minidocs.halo.run/v1alpha1`）、Halo PAT 和 `/kb/list`、`/kb/{slug}/tree`
+> 均**不存在于当前版本**，不要再照旧文档实现。
 
-**不重复造知识库**，MiniDesk 只做「入口 + 沉淀」：
+已有的系统是独立部署的 MiniDocs（`https://docs.minims.cn`），接口基址
+`https://docs.minims.cn/api`（单镜像形态；双镜像形态为 `/minidocs/api`）。
+第三方应用用一枚 `mdt_` 前缀的长期访问令牌，放在
+`Authorization: Bearer <令牌>` 里；令牌不是「另一个账号」，服务端换成令牌所有者本人，
+可读范围与该用户在网页端完全一致，越权一律 404。
+
+**不重复造知识库**，MiniDesk 只做「代理 + 浏览 + 沉淀」：
 
 | 能力 | 实现 |
 |---|---|
-| 浏览 | 后端代理 `GET /api/kb/list`、`GET /api/kb/{slug}/tree`，前端渲染知识库卡片与文档树 |
-| 打开 | 站内 iframe 嵌入文档阅读页；或「新窗口打开」跳 `https://docs.minims.cn/...` |
-| 沉淀 | 笔记页「沉淀到知识库」→ 后端 `POST /api/kb/{slug}/doc` 创建文档（Markdown 原文 + 标题） |
-| 搜索 | 一期跳转站内搜索；二期接 Halo 搜索接口做本地聚合 |
-| 配置 | 设置页填 `Halo 地址` + `PAT`，加密存 `integration_config`，提供「测试连接」按钮 |
+| 我的知识库 | 后端代理 `GET /console/{org}/kbs`（分页 `?page=1&size=N`，响应 `data.list` + `total`） |
+| 站点公开库 | 代理匿名门户 `GET /portal/kbs`，无需令牌也能浏览已发布内容 |
+| 文档树 | 我的库走 `GET /console/{org}/kbs/{slug}/tree`；公开库取 `GET /portal/kb/{org}/{slug}` 的 `view.tree` |
+| 正文 | 我的库 `GET /console/{org}/kbs/{slug}/doc?path=` 返回 Markdown，前端 Vditor 渲染；公开库返回服务端渲染好的 `view.html` |
+| 沉淀 | 笔记页「沉淀到知识库」与知识库页「新建文档」都走 `POST /console/{org}/kbs/{slug}/doc`，需要 `read,write` 令牌 |
+| 搜索 | 基于目录树做文档名 / 路径匹配；`/api/search` 是匿名白名单，带令牌也不会扩大可见范围，因此不直接复用 |
+| 配置 | 设置页填 `站点地址` + `mdt_` 令牌，AES-GCM 加密存 `integration_config`，提供「测试连接」；也可启动时用 `MINIDESK_MINIDOCS_TOKEN` 导入 |
 
-**边界**：MiniDesk 不缓存知识库正文（避免版本不一致），只在需要时实时取；PAT 只存服务端，前端永不接触。
+**边界**：正文不缓存（避免两份过期内容），目录树只缓存 5 分钟；令牌明文只在服务端内存里短暂存在，
+不进日志、不回前端；全局搜索（Ctrl+K）暂不聚合知识库文档，避免高频交互被外部接口拖慢。
 
 ---
 
@@ -568,7 +579,7 @@ frontend/
 
 // 工作
 /work/project  项目      /work/journal  日志
-/work/asset    资产      /work/tool     工具
+/work/asset    资产      /work/tool     书签
 /work/meeting  会议纪要
 
 // 学习
@@ -1158,8 +1169,8 @@ refactor/<scope>  重构
 
 **禁止事项（硬性）**
 
-- ✗ 提交信息里附加任何第三方署名、工具水印或生成标记（`Co-authored-by: ...`、`Generated with ...`、机器人图标等）
-- ✗ 在 commit body 里写与改动无关的元叙述（如「本次由某工具完成」）
+- ✗ 提交信息里附加任何第三方署名、工具水印或生成标记
+- ✗ 在 commit body 里写与改动无关的元叙述
 - ✗ `update code` / `fix bug` / `改一下` 这类无信息量信息
 - ✗ 一次提交混入多个不相关改动（重构与功能分开）
 - ✗ 未经确认自动 `commit` / `push`（本项目规则：改代码与跑测试可自动，提交与部署必须先经确认）
@@ -1324,7 +1335,7 @@ Tauri 桌面（含 jlink、sidecar、自动更新）、图表深化（趋势/对
 | 多租户漏配（新表忘加 user_id） | 数据越权 | 建表 checklist + 启动时校验所有表结构；单测覆盖「A 账号查不到 B 数据」 |
 | Vditor 体积与移动端体验 | 首屏慢、手机上难用 | 动态 import；移动端改 sv 模式；只读用静态预览 |
 | Iconify 在线 API 不可达 | 图标空白 | 安装 `@iconify-json/lucide` 等离线包 |
-| 知识库 PAT 泄露 | Halo 后台被入侵 | 仅存服务端、加密、只回显掩码；最小权限令牌 |
+| 知识库访问令牌泄露 | 第三方以令牌所有者身份读写其全部可见知识库 | 仅存服务端、AES-GCM 加密、只回显掩码；默认签发只读令牌，需要沉淀才给读写；可随时吊销 |
 | 33 个页面同质化 CRUD | 开发枯燥、易出不一致 | 抽 `useCrudTable` + `CrudPage` 模板；列表/表单配置化 |
 | 复盘统计随数据漂移 | 历史复盘失真 | 统计快照落 `stats_json`，不重算 |
 | 移动端表格体验 | 不可用 | 窄屏强制切卡片列表，不硬扛 Element Table |
@@ -1341,7 +1352,7 @@ Tauri 桌面（含 jlink、sidecar、自动更新）、图表深化（趋势/对
 
 1. **工作资料 / 生活相册**：文件存本地磁盘（简单，Tauri 友好）还是接对象存储（你有 RustFS 图床）？倾向本地 + 可选 S3 适配。
 2. **通知**：站内通知够了，还是需要桌面系统通知（Tauri `notification` 插件）/ 微信推送？
-3. **知识库**：iframe 内嵌是否可接受（Halo 可能设了 `X-Frame-Options`）？若不行则全部新窗口打开。
+3. ~~**知识库**：iframe 内嵌是否可接受？~~ **已决策**：不用 iframe（上游可能设 `X-Frame-Options`），改为后端代理 + 站内渲染正文，「打开原文」另开新窗口，见 §5.8。
 4. **多账号**：是否需要「家庭共享数据」（如共用记账、共用购物清单）？当前设计是严格隔离。
 5. **数据导入**：是否需要从现有 Excel / 其他 App 导入历史记账与待办？
 6. **后台入口**：同源 `/console` 就够，还是要独立域名/端口（如 `console.xxx.com`）？独立入口便于加 IP 白名单，但多一层部署。
