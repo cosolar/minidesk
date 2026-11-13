@@ -15,6 +15,8 @@ const siteStore = useSiteStore()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+/** 登录失败原因常驻展示，避免只靠会自动消失的轻提示 */
+const errorMessage = ref('')
 /** 演示模式只在开发环境暴露 */
 const isDev = import.meta.env.DEV
 
@@ -38,6 +40,7 @@ async function onSubmit(): Promise<void> {
   }
 
   loading.value = true
+  errorMessage.value = ''
   try {
     const session = await authApi.login(form.username.trim(), form.password)
     userStore.applySession(session)
@@ -49,8 +52,10 @@ async function onSubmit(): Promise<void> {
     } else {
       await router.replace(userStore.isAdmin ? '/console' : '/')
     }
-  } catch {
-    // 错误提示已由请求拦截器统一处理
+  } catch (error) {
+    // 轻提示会立刻消失，这里再常驻一条，方便看清失败原因
+    errorMessage.value = (error as Error).message || '登录失败，请稍后重试'
+    ElMessage.error(errorMessage.value)
   } finally {
     loading.value = false
   }
@@ -92,6 +97,15 @@ function enterDemo(): void {
       <div class="login__card">
         <h2>欢迎回来</h2>
         <p class="login__sub">登录后继续你的一天</p>
+
+        <el-alert
+          v-if="errorMessage"
+          class="login__alert"
+          type="error"
+          :closable="false"
+          :title="errorMessage"
+          show-icon
+        />
 
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @submit.prevent>
           <el-form-item label="用户名" prop="username">
@@ -287,6 +301,10 @@ function enterDemo(): void {
   margin: 6px 0 24px;
   font-size: 12.5px;
   color: var(--text-secondary);
+}
+
+.login__alert {
+  margin-bottom: 16px;
 }
 
 .login__submit {

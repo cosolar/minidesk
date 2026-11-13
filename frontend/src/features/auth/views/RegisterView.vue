@@ -13,6 +13,8 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const submitting = ref(false)
 const config = ref<RegisterConfig | null>(null)
+/** 提交失败原因常驻展示，避免只靠会自动消失的轻提示 */
+const errorMessage = ref('')
 
 /** 用户名注册 / 邮箱注册，邮箱模式需要后台先配好发件邮箱 */
 const mode = ref<'username' | 'email'>('username')
@@ -102,6 +104,12 @@ const rules = computed<FormRules>(() => ({
       message: `密码至少 ${config.value?.passwordPolicy.minLength ?? 8} 位`,
       trigger: 'blur',
     },
+    ...(config.value?.passwordPolicy.requireLetter
+      ? [{ pattern: /[A-Za-z]/, message: '密码需包含字母', trigger: 'blur' }]
+      : []),
+    ...(config.value?.passwordPolicy.requireDigit
+      ? [{ pattern: /\d/, message: '密码需包含数字', trigger: 'blur' }]
+      : []),
   ],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
@@ -137,6 +145,7 @@ async function onSubmit(): Promise<void> {
   }
 
   submitting.value = true
+  errorMessage.value = ''
   try {
     const session =
       mode.value === 'email'
@@ -157,8 +166,10 @@ async function onSubmit(): Promise<void> {
     userStore.applySession(session)
     ElMessage.success(session.isFirstUser ? '管理员账号创建成功' : '注册成功')
     await router.replace(userStore.isAdmin ? '/console' : '/')
-  } catch {
-    // 统一由拦截器提示
+  } catch (error) {
+    // 轻提示会立刻消失，这里再常驻一条，方便看清失败原因
+    errorMessage.value = (error as Error).message || '注册失败，请稍后重试'
+    ElMessage.error(errorMessage.value)
   } finally {
     submitting.value = false
   }
@@ -175,6 +186,15 @@ async function onSubmit(): Promise<void> {
 
       <h1>创建账号</h1>
       <p class="register__sub">数据存在你自己的设备上，随时可导出备份。</p>
+
+      <el-alert
+        v-if="errorMessage"
+        class="register__alert"
+        type="error"
+        :closable="false"
+        :title="errorMessage"
+        show-icon
+      />
 
       <el-alert
         v-if="config && !config.allowRegister"
@@ -325,119 +345,6 @@ async function onSubmit(): Promise<void> {
         </el-button>
       </el-form>
 
-      <el-form
-        v-else-if="config?.allowRegister && mode === 'email'"
-        ref="emailRef"
-        :model="emailForm"
-        :rules="emailRules"
-        label-position="top"
-        :disabled="loading"
-        :validate-on-rule-change="false"
-        @submit.prevent
-      >
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="emailForm.email" size="large" placeholder="用于接收验证码与登录" />
-        </el-form-item>
-
-        <el-form-item label="验证码" prop="code">
-          <div class="register__code">
-            <el-input v-model="emailForm.code" size="large" placeholder="6 位验证码" maxlength="6" />
-            <el-button
-              size="large"
-              :loading="sending"
-              :disabled="countdown > 0"
-              @click="sendCode"
-            >
-              {{ countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-            </el-button>
-          </div>
-        </el-form-item>
-
-        <el-form-item label="昵称" prop="nickname">
-          <el-input v-model="emailForm.nickname" size="large" placeholder="不填则用邮箱前缀" />
-        </el-form-item>
-
-        <el-form-item label="密码" prop="password">
-          <el-input v-model="emailForm.password" type="password" size="large" show-password placeholder="至少 8 位" />
-        </el-form-item>
-
-        <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input
-            v-model="emailForm.confirmPassword"
-            type="password"
-            size="large"
-            show-password
-            @keyup.enter="onSubmit"
-          />
-        </el-form-item>
-
-        <el-button
-          class="register__submit"
-          type="primary"
-          size="large"
-          :loading="submitting"
-          @click="onSubmit"
-        >
-          注册并登录
-        </el-button>
-      </el-form>
-
-      <el-form
-        v-else-if="config?.allowRegister && mode === 'email'"
-        ref="emailRef"
-        :model="emailForm"
-        :rules="emailRules"
-        label-position="top"
-        :disabled="loading"
-        :validate-on-rule-change="false"
-        @submit.prevent
-      >
-        <el-form-item label="邮箱" prop="email">
-          <el-input v-model="emailForm.email" size="large" placeholder="用于接收验证码与登录" />
-        </el-form-item>
-
-        <el-form-item label="验证码" prop="code">
-          <div class="register__code">
-            <el-input v-model="emailForm.code" size="large" placeholder="6 位验证码" maxlength="6" />
-            <el-button
-              size="large"
-              :loading="sending"
-              :disabled="countdown > 0"
-              @click="sendCode"
-            >
-              {{ countdown > 0 ? `${countdown}s 后重发` : '获取验证码' }}
-            </el-button>
-          </div>
-        </el-form-item>
-
-        <el-form-item label="昵称" prop="nickname">
-          <el-input v-model="emailForm.nickname" size="large" placeholder="不填则用邮箱前缀" />
-        </el-form-item>
-
-        <el-form-item label="密码" prop="password">
-          <el-input v-model="emailForm.password" type="password" size="large" show-password placeholder="至少 8 位" />
-        </el-form-item>
-
-        <el-form-item label="确认密码" prop="confirmPassword">
-          <el-input
-            v-model="emailForm.confirmPassword"
-            type="password"
-            size="large"
-            show-password
-            @keyup.enter="onSubmit"
-          />
-        </el-form-item>
-
-        <el-button
-          class="register__submit"
-          type="primary"
-          size="large"
-          :loading="submitting"
-          @click="onSubmit"
-        >
-          注册并登录
-        </el-button>
-      </el-form>
     </div>
   </div>
 </template>
