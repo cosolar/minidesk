@@ -150,7 +150,8 @@ jobs:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      # 项目目录不是机密，直接写死：放进 Secret 时容易被本机 shell 的路径转换改写
+      DEPLOY_PATH: /opt/minidesk
     steps:
       - uses: actions/checkout@v4
 
