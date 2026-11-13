@@ -128,53 +128,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 部署服务器常在内网，直连 Docker Hub 被阻断或极慢；把同一份镜像同步到
-      # GitHub Container Registry（按 digest 一致，不用重新构建），部署方改拉
-      # ghcr.io/cosolar/minidesk:<tag> 即可。
-      - name: Mirror image to GitHub Container Registry
-        if: env.PUSH_IMAGE == 'true'
-        env:
-          GHCR_IMAGE: ghcr.io/${{ github.repository }}
-          SOURCE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
-            -u "${{ github.actor }}" --password-stdin
-          echo "$SOURCE_TAGS" | tr ',' '\n' | while read -r src; do
-            [ -z "$src" ] && continue
-            tag="${src##*:}"
-            echo "mirroring $src -> $GHCR_IMAGE:$tag"
-            docker buildx imagetools create --tag "$GHCR_IMAGE:$tag" "$src"
-          done
-
-      # 让镜像包可被匿名拉取：部署服务器往往没有 GitHub 凭据。
-      - name: Make the ghcr package pullable
-        if: env.PUSH_IMAGE == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PACKAGE_NAME: ${{ github.repository_owner }}/minidesk
-        run: |
-          code=$(curl -sS -o /tmp/visibility.json -w '%{http_code}' -X PUT \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/user/packages/container/$PACKAGE_NAME/visibility" \
-            -d '{"visibility":"public"}')
-          echo "visibility api: $code"
-          head -c 300 /tmp/visibility.json; echo
-          if [ "$code" != "204" ] && [ "$code" != "200" ]; then
-            curl -sS -X PATCH \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/user/packages/container/$PACKAGE_NAME" \
-              -d '{"visibility":"public"}' | head -c 300; echo
-          fi
-
       - name: Summarize
         run: |
           if [ "$PUSH_IMAGE" = "true" ]; then
             echo "已推送镜像：$IMAGE_NAME（tag 见上方 Build and push 输出）" >> "$GITHUB_STEP_SUMMARY"
-            echo "已同步镜像：ghcr.io/${{ github.repository }}（内网服务器可从此拉取）" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "仅验证构建，未推送。镜像名预留：$IMAGE_NAME" >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -240,19 +197,22 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
-      # 首选让服务器直接从 ghcr.io 拉：走 GitHub 的 CDN，境内速度远好于
-      # 从境外 runner 传 300MB 归档。拉不到时才回退到打包传输。
+      # 首选让服务器自己从镜像仓库拉：服务器已配置国内镜像加速，
+      # 走这条链路比从境外 runner 传 300MB 归档快得多。
+      # 拉不到时才回退到打包传输。
       - name: Pull the image on the server
         id: pull
         run: |
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "REPO='${{ github.repository }}'; VER='${{ steps.ver.outputs.version }}'; \
-             if docker pull ghcr.io/\$REPO:\$VER; then SRC=ghcr.io/\$REPO:\$VER; \
-             else docker pull ghcr.io/\$REPO:latest && SRC=ghcr.io/\$REPO:latest; fi; \
-             docker tag \$SRC minimscn/minidesk:latest; \
-             docker tag \$SRC minimscn/minidesk:\$VER; \
-             echo 'pulled='\$SRC" \
+            "IMG='minimscn/minidesk'; VER='${{ steps.ver.outputs.version }}'; SRC=''; \
+             for i in 1 2 3; do \
+               if docker pull \$IMG:\$VER; then SRC=\$IMG:\$VER; break; fi; \
+               if docker pull \$IMG:latest; then SRC=\$IMG:latest; break; fi; \
+               echo 'pull failed, retrying'; sleep 10; \
+             done; \
+             if [ -z \"\$SRC\" ]; then echo 'unable to pull the image'; exit 1; fi; \
+             echo \"pulled=\$SRC\"" \
             && echo "pulled=true" >> "$GITHUB_OUTPUT" \
             || echo "pulled=false" >> "$GITHUB_OUTPUT"
 
