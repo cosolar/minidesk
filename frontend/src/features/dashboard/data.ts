@@ -138,7 +138,7 @@ export const modules: ModuleConfig[] = [
       },
       {
         code: 'work.tool',
-        name: '工具',
+        name: '书签',
         icon: 'lucide:link',
         color: '#4C6FFF',
         bg: '#EDF1FF',

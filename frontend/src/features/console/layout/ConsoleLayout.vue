@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { DataBoard, Setting, User } from '@element-plus/icons-vue'
+import { DataBoard, FolderOpened, Setting, Timer, User } from '@element-plus/icons-vue'
 import { useUserStore } from '@/core/stores/user'
 
 const route = useRoute()
@@ -11,6 +11,8 @@ const userStore = useUserStore()
 const menus = [
   { path: '/console', title: '概览', icon: DataBoard },
   { path: '/console/users', title: '用户管理', icon: User },
+  { path: '/console/jobs', title: '定时任务', icon: Timer },
+  { path: '/console/backups', title: '备份恢复', icon: FolderOpened },
   { path: '/console/settings', title: '系统设置', icon: Setting },
 ]
 
@@ -212,5 +214,46 @@ async function backToDesk(): Promise<void> {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
+}
+
+@media (max-width: 767px) {
+  .console {
+    flex-direction: column;
+  }
+
+  .console__sidebar {
+    width: 100%;
+    flex: 0 0 auto;
+    padding: 10px 12px;
+  }
+
+  .console__brand {
+    padding: 0 4px 10px;
+  }
+
+  .console__nav {
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+  }
+
+  .console__nav-item {
+    flex: 0 0 auto;
+    height: 34px;
+    white-space: nowrap;
+  }
+
+  .console__foot {
+    display: none;
+  }
+
+  .console__header {
+    height: 48px;
+    padding: 0 14px;
+  }
+
+  .console__content {
+    padding: 14px;
+  }
 }
 </style>

@@ -63,7 +63,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 
     <div class="topbar__actions">
       <RouterLink
-        v-if="userStore.isAdmin"
+        v-if="userStore.isAdmin && !appStore.isMobile"
         class="icon-btn"
         to="/console"
         title="管理后台"
@@ -98,6 +98,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
             <span>当前：{{ appStore.themeMeta.label }}</span>
           </header>
           <ThemePicker :columns="2" />
+          <RouterLink v-if="userStore.isAdmin && appStore.isMobile" class="theme-pop__link" to="/console">
+            管理控制台 →
+          </RouterLink>
           <p class="theme-pop__tip">选择后立即生效，并记住到下次打开</p>
         </div>
       </el-popover>
@@ -263,17 +266,35 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 @media (max-width: 767px) {
   .topbar {
     height: 54px;
-    padding: 0 14px;
+    padding: 0 12px;
+    gap: 8px;
   }
 
   .search {
     height: 36px;
     max-width: none;
-    flex: 1;
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .search__kbd {
     display: none;
+  }
+
+  .topbar__actions {
+    flex-shrink: 0;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
   }
 }
 
@@ -308,6 +329,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
     font-size: 11px;
     color: var(--text-tertiary);
   }
+}
+
+.theme-pop__link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  color: var(--brand-600);
+  font-size: 11.5px;
+  text-align: center;
+  text-decoration: none;
 }
 
 .theme-pop__tip {

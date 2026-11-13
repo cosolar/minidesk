@@ -80,7 +80,7 @@ export const navGroups: NavGroup[] = [
       { path: '/work/project', name: 'work-project', title: '项目' },
       { path: '/work/journal', name: 'work-journal', title: '日志' },
       { path: '/work/asset', name: 'work-asset', title: '资产' },
-      { path: '/work/tool', name: 'work-tool', title: '工具' },
+      { path: '/work/tool', name: 'work-tool', title: '书签' },
       { path: '/work/meeting', name: 'work-meeting', title: '会议纪要' },
     ],
   },

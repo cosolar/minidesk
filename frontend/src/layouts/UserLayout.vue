@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import AppSidebar from './components/AppSidebar.vue'
+import MobileTabBar from './components/MobileTabBar.vue'
 import { useAppStore } from '@/core/stores/app'
 
 const appStore = useAppStore()
@@ -41,6 +42,8 @@ function onToggleSidebar(): void {
         </RouterView>
       </main>
     </div>
+
+    <MobileTabBar v-if="appStore.isMobile" />
   </div>
 </template>
 
@@ -66,7 +69,7 @@ function onToggleSidebar(): void {
   padding: 4px $content-padding 32px;
 
   @include respond-below(sm) {
-    padding: 4px 14px 24px;
+    padding: 4px 14px 84px;
   }
 }
 </style>

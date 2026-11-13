@@ -6,6 +6,7 @@ import { useAppStore } from '@/core/stores/app'
 import type { ThemeId } from '@/core/theme/catalog'
 import ThemePicker from '@/shared/components/ThemePicker.vue'
 import { settingsApi, type Integration } from '../api'
+import { kbApi } from '@/features/study/kb/api'
 
 const appStore = useAppStore()
 
@@ -39,6 +40,7 @@ const kb = ref<IntegrationForm>({
 })
 
 const testing = ref(false)
+const kbTesting = ref(false)
 const settingsQuery = useQuery({
   queryKey: ['settings'],
   queryFn: () => settingsApi.get(),
@@ -107,8 +109,28 @@ async function testWeather(): Promise<void> {
   }
 }
 
+async function testMinidocs(): Promise<void> {
+  if (kb.value.apiKey.trim()) {
+    ElMessage.warning('新令牌需要先保存，再点测试连接')
+    return
+  }
+  kbTesting.value = true
+  try {
+    const result = await kbApi.test()
+    ElMessage.success(
+      `连接成功：${result.displayName || result.username} · 组织 ${result.defaultOrg}`,
+    )
+  } finally {
+    kbTesting.value = false
+  }
+}
+
 const weatherHint = computed(() =>
   weather.value.hasKey ? `已配置（${weather.value.maskedKey}），留空则不修改` : '未配置，首页显示模拟天气',
+)
+
+const kbHint = computed(() =>
+  kb.value.hasKey ? `已配置（${kb.value.maskedKey}），留空则不修改` : '粘贴 mdt_ 开头的访问令牌',
 )
 </script>
 
@@ -168,11 +190,13 @@ const weatherHint = computed(() =>
 
     <section class="card">
       <div class="card__head">
-        <h2>知识库（minidocs）</h2>
+        <h2>知识库（MiniDocs）</h2>
         <el-switch v-model="kb.enabled" />
       </div>
       <p class="card__hint">
-        Halo 站点地址 + 个人访问令牌（PAT），用于在学习板块浏览与沉淀文档。令牌仅存服务端。
+        站点地址 + 访问令牌（mdt_ 开头），在知识库「账号 → 第三方应用授权」签发，令牌只显示一次。
+        它代表你本人的身份：只读令牌只能浏览，读写令牌才能把笔记沉淀成文档。服务端只存密文。
+        填站点根地址即可，后端自动补接口路径。
       </p>
 
       <div class="field">
@@ -186,13 +210,14 @@ const weatherHint = computed(() =>
           v-model="kb.apiKey"
           type="password"
           show-password
-          :placeholder="kb.hasKey ? `已配置（${kb.maskedKey}），留空则不修改` : '粘贴 Halo PAT'"
+          :placeholder="kbHint"
           style="max-width: 320px"
         />
       </div>
 
       <div class="card__actions">
         <el-button type="primary" @click="saveIntegration('minidocs', kb)">保存</el-button>
+        <el-button :loading="kbTesting" @click="testMinidocs">测试连接</el-button>
       </div>
     </section>
   </div>

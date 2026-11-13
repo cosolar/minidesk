@@ -11,7 +11,7 @@ const queryClient = useQueryClient()
 
 const meta = computed(() =>
   props.module === 'work'
-    ? { title: '工具', sub: '把每天要开的后台、文档、监控收到一页，少翻收藏夹' }
+    ? { title: '书签', sub: '把每天要开的后台、文档、监控收到一页，少翻收藏夹' }
     : { title: '资源', sub: '常用学习站点导航，点开次数会自动累计' },
 )
 

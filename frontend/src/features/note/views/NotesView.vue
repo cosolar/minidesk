@@ -3,12 +3,13 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Delete, Plus, Star, StarFilled } from '@element-plus/icons-vue'
+import { Delete, Plus, Star, StarFilled, Upload } from '@element-plus/icons-vue'
 import { useDebounceFn } from '@vueuse/core'
 import dayjs from 'dayjs'
 import MarkdownEditor from '@/shared/components/MarkdownEditor.vue'
 import { noteApi, type NoteSummary } from '../api'
 import { lifeLogApi } from '@/features/life/lifelog/api'
+import { kbApi, type KbBook } from '@/features/study/kb/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -183,6 +184,61 @@ const saveLabel = computed(() => {
   }
   return saveState.value === 'dirty' ? '未保存' : '已保存'
 })
+
+/** 沉淀到知识库：把当前笔记的 Markdown 原文写进 MiniDocs，需要读写权限的令牌 */
+const publishVisible = ref(false)
+const publishBooks = ref<KbBook[]>([])
+const publishing = ref(false)
+const publishForm = reactive({ slug: '', path: '' })
+const publishBook = computed(() =>
+  publishBooks.value.find((item) => item.slug === publishForm.slug),
+)
+
+async function openPublish(): Promise<void> {
+  if (!draft.content.trim()) {
+    ElMessage.warning('这篇笔记还没有内容')
+    return
+  }
+  try {
+    const page = await kbApi.books({ scope: 'mine', size: 50 })
+    publishBooks.value = page.list
+    if (!page.list.length) {
+      ElMessage.warning('还没有可用的知识库，请先到「知识库」页创建一个')
+      return
+    }
+    publishForm.slug = page.list[0].slug
+    publishForm.path = `笔记/${draft.title.trim() || '无标题'}`
+    publishVisible.value = true
+  } catch {
+    // HTTP 层已统一提示（未配置令牌 / 服务不可达）
+  }
+}
+
+async function publish(): Promise<void> {
+  if (!publishForm.slug || !publishForm.path.trim()) {
+    return
+  }
+  publishing.value = true
+  try {
+    const result = await kbApi.createDoc({
+      org: publishBook.value?.orgSlug || undefined,
+      slug: publishForm.slug,
+      path: publishForm.path,
+      content: draft.content,
+    })
+    publishVisible.value = false
+    const open = await ElMessageBox.confirm('已写入知识库，是否打开原文？', '沉淀成功', {
+      confirmButtonText: '打开',
+      cancelButtonText: '稍后',
+      type: 'success',
+    }).catch(() => false)
+    if (open) {
+      window.open(result.url, '_blank', 'noopener')
+    }
+  } finally {
+    publishing.value = false
+  }
+}
 </script>
 
 <template>
@@ -273,6 +329,7 @@ const saveLabel = computed(() => {
             <el-button link :icon="draft.pinned ? StarFilled : Star" @click="togglePin">
               {{ draft.pinned ? '已置顶' : '置顶' }}
             </el-button>
+            <el-button link :icon="Upload" @click="openPublish">沉淀到知识库</el-button>
           </div>
         </header>
 
@@ -285,6 +342,31 @@ const saveLabel = computed(() => {
         <el-button type="primary" @click="createMutation.mutate()">新建笔记</el-button>
       </div>
     </section>
+
+    <el-dialog v-model="publishVisible" title="沉淀到知识库" width="480px">
+      <p class="publish-hint">
+        把当前笔记的 Markdown 原文写入 docs.minims.cn。需要读写权限的令牌，同名路径会写入失败。
+      </p>
+      <div class="publish-field">
+        <label>目标知识库</label>
+        <el-select v-model="publishForm.slug" style="width: 100%">
+          <el-option
+            v-for="book in publishBooks"
+            :key="book.id"
+            :label="book.name"
+            :value="book.slug"
+          />
+        </el-select>
+      </div>
+      <div class="publish-field">
+        <label>文档路径</label>
+        <el-input v-model="publishForm.path" placeholder="笔记/标题" />
+      </div>
+      <template #footer>
+        <el-button @click="publishVisible = false">取消</el-button>
+        <el-button type="primary" :loading="publishing" @click="publish">写入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -498,5 +580,24 @@ const saveLabel = computed(() => {
 .notes-editor__empty-icon {
   font-size: 34px;
   color: var(--brand-200);
+}
+
+.publish-hint {
+  margin-bottom: 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.publish-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+
+  label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
 }
 </style>

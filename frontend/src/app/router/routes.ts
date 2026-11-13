@@ -68,7 +68,7 @@ const implementedRoutes: RouteRecordRaw[] = [
     name: 'work-tool',
     component: () => import('@/features/common/navlink/views/NavLinkView.vue'),
     props: { module: 'work' },
-    meta: { title: '工具' },
+    meta: { title: '书签' },
   },
   {
     path: '/work/meeting',
@@ -216,6 +216,18 @@ export const routes: RouteRecordRaw[] = [
         name: 'console-users',
         component: () => import('@/features/console/views/ConsoleUsers.vue'),
         meta: { title: '用户管理', requiresAdmin: true },
+      },
+      {
+        path: 'jobs',
+        name: 'console-jobs',
+        component: () => import('@/features/console/views/ConsoleJobs.vue'),
+        meta: { title: '定时任务', requiresAdmin: true },
+      },
+      {
+        path: 'backups',
+        name: 'console-backups',
+        component: () => import('@/features/console/views/ConsoleBackups.vue'),
+        meta: { title: '备份恢复', requiresAdmin: true },
       },
       {
         path: 'settings',
