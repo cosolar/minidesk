@@ -213,7 +213,8 @@ jobs:
                echo 'pull failed, retrying'; sleep 10; \
              done; \
              if [ -z \"\$SRC\" ]; then echo 'unable to pull the image'; exit 1; fi; \
-             echo \"pulled=\$SRC\"" \
+             docker tag \"\$SRC\" \"\$IMG:latest\"; \
+             echo \"pulled=\$SRC tagged=\$IMG:latest\"" \
             && echo "pulled=true" >> "$GITHUB_OUTPUT" \
             || echo "pulled=false" >> "$GITHUB_OUTPUT"
 
