@@ -836,6 +836,23 @@ CREATE TABLE IF NOT EXISTS note (
 
 CREATE INDEX IF NOT EXISTS idx_note_user ON note(user_id, module, type, updated_at);
 
+-- 笔记分享：公开短链 /share/note/{token}，密码可选、有效期可空（空=永久）
+CREATE TABLE IF NOT EXISTS note_share (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       BIGINT       NOT NULL,
+  note_id       BIGINT       NOT NULL,
+  token         VARCHAR(64)  NOT NULL,
+  password_hash VARCHAR(100),
+  expire_at     DATETIME,
+  enabled       TINYINT      NOT NULL DEFAULT 1,
+  created_at    DATETIME     NOT NULL,
+  updated_at    DATETIME     NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_note_share_note ON note_share(user_id, note_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_note_share_token ON note_share(token);
+
 CREATE TABLE IF NOT EXISTS journal (
   id             INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id        BIGINT       NOT NULL,

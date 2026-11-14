@@ -179,6 +179,13 @@ export const routes: RouteRecordRaw[] = [
     meta: { title: '注册', public: true },
   },
   {
+    // 笔记公开分享页：未登录可读，密码由后端校验
+    path: '/share/note/:token',
+    name: 'share-note',
+    component: () => import('@/features/share/views/NoteShareView.vue'),
+    meta: { title: '分享的笔记', public: true },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/UserLayout.vue'),
     children: [

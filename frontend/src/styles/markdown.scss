@@ -1,0 +1,361 @@
+// Markdown 正文统一排版。
+// ByteMD 只提供编辑器容器样式，正文元素样式在这里用设计 token 补齐，
+// 笔记预览（Viewer）和编辑器里的分屏预览共用同一套，保证两处观感一致。
+.markdown-body {
+  // 代码高亮配色：默认按 One Light 铺底，关键色跟随主题色相（见文件末尾各主题块）
+  --md-code-keyword: #0f766e;
+  --md-code-string: #50a14f;
+  --md-code-number: #986801;
+  --md-code-title: #0d9488;
+  --md-code-builtin: #c18401;
+  --md-code-comment: #a0a1a7;
+
+  font-size: 14.5px;
+  line-height: 1.85;
+  color: var(--text-primary);
+  overflow-wrap: break-word;
+
+  > :first-child {
+    margin-top: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin: 28px 0 12px;
+    font-family: var(--font-display);
+    font-weight: 650;
+    line-height: 1.35;
+    color: var(--text-primary);
+    scroll-margin-top: 24px;
+  }
+
+  h1 {
+    margin-top: 34px;
+    font-size: 23px;
+  }
+
+  h2 {
+    margin-top: 32px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 19px;
+  }
+
+  h3 {
+    margin-top: 26px;
+    font-size: 16px;
+  }
+
+  h4 {
+    margin-top: 20px;
+    font-size: 14.5px;
+    color: var(--text-secondary);
+  }
+
+  h5,
+  h6 {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+  }
+
+  p {
+    margin: 0 0 14px;
+  }
+
+  strong {
+    font-weight: 650;
+  }
+
+  a {
+    color: var(--brand-600);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--brand-200);
+
+    &:hover {
+      text-decoration-color: var(--brand-500);
+    }
+  }
+
+  // 全局 reset 把列表样式清掉了，正文里要还原
+  ul,
+  ol {
+    margin: 0 0 14px;
+    padding-left: 1.4em;
+  }
+
+  ul {
+    list-style: disc;
+
+    ul {
+      list-style: circle;
+    }
+  }
+
+  ol {
+    list-style: decimal;
+  }
+
+  li {
+    margin: 4px 0;
+  }
+
+  li::marker {
+    color: var(--brand-400);
+  }
+
+  li > p {
+    margin: 0;
+  }
+
+  // GFM 任务列表
+  li > input[type='checkbox'] {
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  blockquote {
+    margin: 0 0 16px;
+    padding: 12px 16px;
+    border-left: 3px solid var(--brand-400);
+    border-radius: 0 10px 10px 0;
+    background: var(--brand-50);
+    color: var(--text-secondary);
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  code {
+    font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+    font-size: 12.8px;
+  }
+
+  p code,
+  li code,
+  td code {
+    padding: 2px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-subtle);
+    color: var(--brand-700);
+  }
+
+  pre {
+    position: relative;
+    margin: 0 0 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--border-color);
+    border-radius: 14px;
+    background: var(--bg-subtle);
+    overflow-x: auto;
+
+    // 顶部一条主题色细线，让代码块和品牌色产生联系，不额外加装饰元素
+    &::before {
+      position: absolute;
+      top: 0;
+      right: 16px;
+      left: 16px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--brand-400), transparent);
+      content: '';
+      opacity: 0.45;
+    }
+
+    code {
+      padding: 0;
+      border: none;
+      background: transparent;
+      line-height: 1.72;
+      color: var(--text-primary);
+      tab-size: 2;
+    }
+  }
+
+  // KaTeX 公式：块级居中且可横向滚动，长公式不撑破版面
+  .math-display {
+    margin: 4px 0 18px;
+    padding: 2px 4px 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-align: center;
+  }
+
+  .math-display .katex-display {
+    margin: 0;
+  }
+
+  .katex {
+    font-size: 1.04em;
+    color: var(--text-primary);
+  }
+
+  img {
+    cursor: zoom-in;
+  }
+
+  // 包在链接里的图点击应该跳转，不弹灯箱
+  a img {
+    cursor: pointer;
+  }
+
+  table {
+    display: table;
+    width: 100%;
+    margin: 0 0 16px;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  th,
+  td {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  th {
+    background: var(--bg-subtle);
+    font-weight: 600;
+  }
+
+  tr:nth-child(2n) td {
+    background: var(--row-hover);
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    margin: 6px 0 16px;
+    border-radius: 10px;
+  }
+
+  hr {
+    margin: 28px 0;
+    border: none;
+    border-top: 1px solid var(--border-color);
+  }
+
+  // highlight.js 只加 hljs-* 类，配色在这里定义，跟随主题
+  .hljs {
+    color: var(--text-primary);
+    background: transparent;
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: var(--md-code-comment);
+    font-style: italic;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-type,
+  .hljs-doctag {
+    color: var(--md-code-keyword);
+  }
+
+  .hljs-string,
+  .hljs-regexp,
+  .hljs-addition,
+  .hljs-meta-string {
+    color: var(--md-code-string);
+  }
+
+  .hljs-number,
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-selector-attr,
+  .hljs-selector-class,
+  .hljs-selector-id {
+    color: var(--md-code-number);
+  }
+
+  .hljs-title,
+  .hljs-section,
+  .hljs-function .hljs-title,
+  .hljs-class .hljs-title {
+    color: var(--md-code-title);
+  }
+
+  .hljs-built_in,
+  .hljs-variable,
+  .hljs-template-variable,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-link {
+    color: var(--md-code-builtin);
+  }
+
+  .hljs-deletion {
+    color: var(--md-code-keyword);
+  }
+}
+
+// 代码高亮随皮肤走：关键字 / 标题取各主题的品牌色相，其余保持中性，避免花哨
+[data-theme='blue'] .markdown-body {
+  --md-code-keyword: #1d4ed8;
+  --md-code-title: #1772f6;
+}
+
+[data-theme='violet'] .markdown-body {
+  --md-code-keyword: #7c3aed;
+  --md-code-title: #9333ea;
+}
+
+[data-theme='warm'] .markdown-body {
+  --md-code-keyword: #b45309;
+  --md-code-title: #c2410c;
+  --md-code-string: #4d7c0f;
+}
+
+[data-theme='pure'] .markdown-body {
+  --md-code-keyword: #475569;
+  --md-code-title: #0f766e;
+  --md-code-comment: #94a3b8;
+}
+
+[data-theme='night'] .markdown-body {
+  --md-code-keyword: #ff7b72;
+  --md-code-string: #a5d6ff;
+  --md-code-number: #79c0ff;
+  --md-code-title: #d2a8ff;
+  --md-code-builtin: #ffa657;
+  --md-code-comment: #8b949e;
+}
+
+// 图片灯箱（medium-zoom）：插件只提供交互，遮罩与层级样式在这里补，
+// 层级要高于 Element Plus 的弹层（2000+），否则在对话框里点图会被盖住
+.medium-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  will-change: opacity;
+}
+
+.medium-zoom--opened .medium-zoom-overlay {
+  cursor: zoom-out;
+  opacity: 1;
+}
+
+.medium-zoom-image {
+  cursor: zoom-in;
+  transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+.medium-zoom-image--opened {
+  z-index: 3001;
+  cursor: zoom-out;
+  will-change: transform;
+}
+

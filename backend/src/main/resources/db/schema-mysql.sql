@@ -830,6 +830,21 @@ CREATE TABLE IF NOT EXISTS `note` (
   KEY `idx_note_user` (`user_id`, `module`, `type`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `note_share` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `note_id` BIGINT NOT NULL,
+  `token` VARCHAR(64) NOT NULL,
+  `password_hash` VARCHAR(100),
+  `expire_at` DATETIME,
+  `enabled` TINYINT NOT NULL DEFAULT 1,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_note_share_note` (`user_id`, `note_id`),
+  UNIQUE KEY `uk_note_share_token` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `journal` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT NOT NULL,
