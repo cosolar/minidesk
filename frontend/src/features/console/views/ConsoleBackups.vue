@@ -260,7 +260,7 @@ async function onFileChange(event: Event): Promise<void> {
     padding: 1px 5px;
     border-radius: 4px;
     background: #eef5f2;
-    color: #17795d;
+    color: var(--brand-700);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
   }
@@ -276,8 +276,8 @@ async function onFileChange(event: Event): Promise<void> {
   height: 36px;
   flex: 0 0 36px;
   border-radius: 10px;
-  background: #dff5ec;
-  color: #23a981;
+  background: var(--brand-100);
+  color: var(--brand-600);
   font-size: 18px;
 }
 

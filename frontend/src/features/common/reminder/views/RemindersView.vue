@@ -297,7 +297,7 @@ const greeting = computed(() => (stats.value.overdue > 0 ? '先处理逾期的�
 
 .reminder-empty__icon {
   font-size: 28px;
-  color: var(--brand-300, #c6efe1);
+  color: var(--brand-200);
 }
 
 .reminder-item {
@@ -331,7 +331,7 @@ const greeting = computed(() => (stats.value.overdue > 0 ? '先处理逾期的�
   }
 
   &.is-soon {
-    border-left-color: var(--brand-300, #c6efe1);
+    border-left-color: var(--brand-200);
   }
 }
 

@@ -140,8 +140,8 @@ onMounted(() => {
   box-shadow: 0 8px 24px rgba(23, 74, 60, 0.06);
 
   &:focus-within {
-    border-color: var(--brand-300, #c6efe1);
-    box-shadow: 0 10px 28px rgba(53, 199, 155, 0.12);
+    border-color: var(--brand-200);
+    box-shadow: 0 10px 28px rgba(11, 125, 119, 0.12);
   }
 }
 

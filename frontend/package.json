@@ -1,5 +1,5 @@
 {
-  "name": "minidesk-frontend",
+  "name": "minidesk",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -10,13 +10,21 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@bytemd/plugin-gfm": "^1.22.0",
+    "@bytemd/plugin-highlight": "^1.22.0",
+    "@bytemd/plugin-math": "^1.22.0",
+    "@bytemd/plugin-medium-zoom": "^1.22.0",
+    "@bytemd/vue-next": "^1.22.0",
     "@element-plus/icons-vue": "^2.3.2",
     "@iconify/vue": "^5.0.5",
     "@tanstack/vue-query": "^5.107.1",
     "@vueuse/core": "^15.0.0",
     "axios": "^1.21.1",
+    "bytemd": "^1.22.0",
     "dayjs": "^1.11.23",
     "element-plus": "^2.14.8",
+    "katex": "^0.19.1",
+    "medium-zoom": "^1.1.2",
     "nprogress": "^0.2.0",
     "pinia": "^2.3.1",
     "vditor": "^4.0.1",

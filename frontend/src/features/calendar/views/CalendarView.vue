@@ -415,8 +415,8 @@ async function removeEvent(item: CalendarItem): Promise<void> {
 
   &.is-selected {
     background: var(--brand-50);
-    border-color: var(--brand-300, #c6efe1);
-    box-shadow: 0 6px 16px rgba(53, 199, 155, 0.12);
+    border-color: var(--brand-200);
+    box-shadow: 0 6px 16px rgba(11, 125, 119, 0.12);
   }
 }
 

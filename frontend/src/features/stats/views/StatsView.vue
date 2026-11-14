@@ -373,7 +373,7 @@ function lifeRatio(value: number): number {
   transition: height 600ms $ease-out;
 
   &.is-primary {
-    background: linear-gradient(180deg, #6fe3bd, #35c79b);
+    background: linear-gradient(180deg, var(--brand-400), var(--brand-500));
   }
 
   &.is-secondary {
@@ -424,7 +424,7 @@ function lifeRatio(value: number): number {
   }
 
   &.is-primary::before {
-    background: #35c79b;
+    background: var(--brand-500);
   }
 
   &.is-secondary::before {

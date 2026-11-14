@@ -331,7 +331,8 @@ async function removeItem(item: JournalVO): Promise<void> {
 }
 
 .journal-editor {
-  @include card($radius-lg);
+  // 内含 Markdown 编辑器，全屏依赖 position: fixed，不能用带 backdrop-filter 的玻璃卡
+  @include card-solid($radius-lg);
   padding: 16px;
   min-height: 420px;
 }

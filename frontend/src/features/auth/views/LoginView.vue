@@ -4,14 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Icon } from '@iconify/vue'
 import { useUserStore } from '@/core/stores/user'
-import { useSiteStore } from '@/core/stores/site'
+import BrandLogo from '@/shared/components/BrandLogo.vue'
 import lakeImage from '@/assets/hero-lake.jpg'
 import { authApi } from '../api'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
-const siteStore = useSiteStore()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -27,10 +26,8 @@ const form = reactive({
 
 const rules: FormRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少 6 位', trigger: 'blur' },
-  ],
+  // 登录只校验已有密码，长度策略属于注册环节，这里不做拦截
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
 async function onSubmit(): Promise<void> {
@@ -84,7 +81,7 @@ function enterDemo(): void {
       <span class="login__veil" aria-hidden="true" />
 
       <div class="login__brand">
-        <img class="login__logo" :src="siteStore.wideLogo" :alt="siteStore.siteName" />
+        <BrandLogo mode="wide" size="lg" />
       </div>
 
       <div class="login__slogan">
@@ -216,15 +213,6 @@ function enterDemo(): void {
   background: var(--login-veil);
 }
 
-.login__logo {
-  height: 40px;
-  /* logo 本体是白底 JPG，浅色页面上用 multiply 把白底融掉 */
-  mix-blend-mode: multiply;
-  width: auto;
-  object-fit: contain;
-  filter: drop-shadow(0 6px 16px rgba(17, 73, 60, 0.18));
-}
-
 .login__brand {
   position: relative;
   z-index: 1;
@@ -252,7 +240,7 @@ function enterDemo(): void {
   border-radius: 12px;
   color: #fff;
   background: linear-gradient(145deg, $brand-400, $brand-600);
-  box-shadow: 0 8px 18px rgba(53, 199, 155, 0.3);
+  box-shadow: 0 8px 18px rgba(11, 125, 119, 0.3);
 }
 
 .login__slogan {

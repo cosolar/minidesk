@@ -1,21 +1,16 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
-import defaultMark from '@/assets/logo-mark.webp'
-import defaultWide from '@/assets/logo-wide.webp'
+import { ref } from 'vue'
 import { siteApi } from '@/core/api/site'
 
 /**
  * 站点品牌：后台可替换站点名与两张 logo。
- * 未配置时回退到内置资源，保证首次启动也有完整的品牌观感。
+ * 未配置时由 BrandLogo 组件用内联 SVG 兜底，颜色跟随当前主题。
  */
 export const useSiteStore = defineStore('site', () => {
   const siteName = ref('MiniDesk')
   const logoUrl = ref<string | null>(null)
   const logoWideUrl = ref<string | null>(null)
   const loaded = ref(false)
-
-  const wideLogo = computed(() => logoWideUrl.value || defaultWide)
-  const markLogo = computed(() => logoUrl.value || defaultMark)
 
   async function load(): Promise<void> {
     try {
@@ -38,5 +33,5 @@ export const useSiteStore = defineStore('site', () => {
     logoWideUrl.value = info.logoWideUrl
   }
 
-  return { siteName, logoUrl, logoWideUrl, loaded, wideLogo, markLogo, load, apply }
+  return { siteName, logoUrl, logoWideUrl, loaded, load, apply }
 })

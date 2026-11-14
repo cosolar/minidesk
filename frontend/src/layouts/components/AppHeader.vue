@@ -155,7 +155,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 
   &:focus-within {
     border-color: var(--brand-200);
-    box-shadow: 0 6px 18px rgba(53, 199, 155, 0.14);
+    box-shadow: 0 6px 18px rgba(11, 125, 119, 0.14);
   }
 }
 

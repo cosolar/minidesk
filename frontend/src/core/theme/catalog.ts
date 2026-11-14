@@ -4,7 +4,7 @@
  * 真正的色值在 `styles/theme.scss` 里用 CSS 变量定义（`[data-theme='x']`），
  * 这里只放「给选择器展示用」的信息，避免颜色在两处各维护一份。
  */
-export type ThemeId = 'mint' | 'violet' | 'night' | 'warm' | 'pure'
+export type ThemeId = 'mint' | 'blue' | 'violet' | 'night' | 'warm' | 'pure'
 
 export interface ThemeDef {
   id: ThemeId
@@ -32,8 +32,18 @@ export const THEMES: ThemeDef[] = [
     tagline: '清爽耐看，默认主题',
     greeting: '让工作更高效，让生活更简单。',
     dark: false,
-    swatch: 'linear-gradient(150deg, #eaf7f1 0%, #b9e6d6 44%, #35c79b 100%)',
+    swatch: 'linear-gradient(150deg, #eef7f6 0%, #b9dfdb 44%, #0b7d77 100%)',
     metaColor: '#F5FAF8',
+  },
+  {
+    id: 'blue',
+    name: '蓝色',
+    label: '蔚蓝 · 澄澈',
+    tagline: '通透清爽，适合长时间专注',
+    greeting: '清清爽爽地开始，今天适合推进重要的事。',
+    dark: false,
+    swatch: 'linear-gradient(150deg, #eaf2ff 0%, #b7d3ff 44%, #1772f6 100%)',
+    metaColor: '#F3F7FD',
   },
   {
     id: 'violet',

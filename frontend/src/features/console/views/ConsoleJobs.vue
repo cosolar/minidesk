@@ -300,8 +300,8 @@ function statusLabel(value: string | null): string {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: #dff5ec;
-  color: #23a981;
+  background: var(--brand-100);
+  color: var(--brand-600);
   font-size: 19px;
 }
 

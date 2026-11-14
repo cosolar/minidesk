@@ -375,8 +375,8 @@ function typeIcon(type: DocType) {
   }
 
   &.is-link {
-    background: rgba(53, 199, 155, 0.14);
-    color: #35c79b;
+    background: color-mix(in srgb, var(--brand-500) 14%, transparent);
+    color: var(--brand-500);
   }
 
   &.is-file {

@@ -1,6 +1,7 @@
 @use './theme.scss';
 @use './element-override.scss';
 @use './theme-overrides.scss';
+@use './markdown.scss';
 
 *,
 *::before,
@@ -110,6 +111,11 @@ img {
 // 统一滚动条
 * {
   @include scrollbar;
+}
+
+// Markdown 编辑器全屏时锁住页面滚动，避免背后的页面跟着滚
+body:has(.bytemd-fullscreen) {
+  overflow: hidden;
 }
 
 @media (prefers-reduced-motion: reduce) {

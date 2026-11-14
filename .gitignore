@@ -38,3 +38,4 @@ backend/logs/
 .DS_Store
 Thumbs.db
 *.log
+/.screenshots/

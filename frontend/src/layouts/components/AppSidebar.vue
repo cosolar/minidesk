@@ -5,6 +5,7 @@ import { ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { homeNav, navGroups, systemNav, unifiedIcons, unifiedNav } from '@/app/router/nav'
 import { useAppStore } from '@/core/stores/app'
 import { useSiteStore } from '@/core/stores/site'
+import BrandLogo from '@/shared/components/BrandLogo.vue'
 import lakeImage from '@/assets/hero-lake.jpg'
 
 const emit = defineEmits<{ navigate: [] }>()
@@ -86,13 +87,7 @@ function startResize(event: MouseEvent): void {
   >
     <div class="sidebar__brand">
       <RouterLink to="/" class="brand-logo" :title="siteStore.siteName" @click="onNavigate">
-        <img
-          v-if="!appStore.sidebarCollapsed"
-          :src="siteStore.wideLogo"
-          :alt="siteStore.siteName"
-          class="brand-logo__wide"
-        />
-        <img v-else :src="siteStore.markLogo" :alt="siteStore.siteName" class="brand-logo__mark" />
+        <BrandLogo :mode="appStore.sidebarCollapsed ? 'mark' : 'wide'" />
       </RouterLink>
 
       <button
@@ -136,7 +131,7 @@ function startResize(event: MouseEvent): void {
       <div v-for="group in navGroups" :key="group.key" class="nav-group">
         <button
           class="nav-item nav-group__header"
-          :class="{ 'is-open': expanded.includes(group.key), 'is-active': activeGroup === group.key }"
+          :class="{ 'is-open': expanded.includes(group.key), 'is-current': activeGroup === group.key }"
           type="button"
           :title="appStore.sidebarCollapsed ? group.title : undefined"
           @click="toggleGroup(group.key)"
@@ -155,8 +150,7 @@ function startResize(event: MouseEvent): void {
             :class="{ 'is-active': isActive(item.path) }"
             @click="onNavigate"
           >
-            <span class="nav-subitem__dot" />
-            {{ item.title }}
+            <span class="nav-subitem__text">{{ item.title }}</span>
           </RouterLink>
         </div>
       </div>
@@ -210,8 +204,15 @@ function startResize(event: MouseEvent): void {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 16px 12px 0;
-  background: linear-gradient(180deg, var(--sidebar-bg-from) 0%, var(--sidebar-bg-to) 100%);
+  padding: 14px 12px 0;
+  // 侧栏也做玻璃：半透明渐变 + 背景模糊，让页面底色晕染透上来
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--sidebar-bg-from) 76%, transparent) 0%,
+    color-mix(in srgb, var(--sidebar-bg-to) 82%, transparent) 100%
+  );
+  backdrop-filter: blur(18px) saturate(1.12);
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
   border-right: 1px solid var(--border-color);
   transition: width $duration-base $ease-out;
   z-index: 30;
@@ -223,6 +224,15 @@ function startResize(event: MouseEvent): void {
   &.is-collapsed {
     padding-inline: 10px;
 
+    .sidebar__brand {
+      justify-content: center;
+      padding-inline: 0;
+    }
+
+    .brand-logo {
+      justify-content: center;
+    }
+
     .nav-item__text,
     .nav-group__arrow,
     .nav-subitem {
@@ -231,6 +241,13 @@ function startResize(event: MouseEvent): void {
 
     .nav-item {
       justify-content: center;
+      height: 40px;
+      padding: 0;
+      gap: 0;
+
+      &::before {
+        display: none;
+      }
     }
 
     .nav-group__body {
@@ -269,7 +286,7 @@ function startResize(event: MouseEvent): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 6px 16px;
+  padding: 4px 8px 18px;
 }
 
 .brand-logo {
@@ -277,24 +294,6 @@ function startResize(event: MouseEvent): void {
   min-width: 0;
   display: flex;
   align-items: center;
-
-  img {
-    display: block;
-    max-width: 100%;
-  }
-}
-
-.brand-logo__wide {
-  height: 34px;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-
-.brand-logo__mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  object-fit: cover;
 }
 
 .brand-collapse {
@@ -311,7 +310,7 @@ function startResize(event: MouseEvent): void {
   transition: opacity $duration-fast $ease-out, background $duration-fast $ease-out;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.9);
+    background: var(--surface-soft);
     color: var(--brand-600);
   }
 }
@@ -332,7 +331,7 @@ function startResize(event: MouseEvent): void {
   cursor: pointer;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.8);
+    background: var(--surface-soft);
     color: var(--brand-600);
   }
 }
@@ -342,20 +341,26 @@ function startResize(event: MouseEvent): void {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-bottom: 8px;
+  gap: 6px;
+  padding: 2px 0 10px;
   @include scrollbar(4px);
+
+  /* 展开分组后内容会超高，必须禁止子项被挤压，否则整列会被压扁而不是滚动 */
+  > * {
+    flex: 0 0 auto;
+  }
 }
 
 .nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  height: 38px;
+  height: 40px;
   padding: 0 10px;
   border: none;
-  border-radius: 11px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text-secondary);
   font-size: 13.5px;
@@ -364,16 +369,42 @@ function startResize(event: MouseEvent): void {
     background $duration-fast $ease-out,
     color $duration-fast $ease-out;
 
+  /* 选中态左侧指示条 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 3px;
+    width: 3px;
+    height: 15px;
+    margin-top: -7.5px;
+    border-radius: 3px;
+    background: var(--brand-500);
+    opacity: 0;
+    transform: scaleY(0.4);
+    transition:
+      opacity $duration-fast $ease-out,
+      transform $duration-fast $ease-out;
+  }
+
   &:hover {
     background: var(--surface-soft);
     color: var(--text-primary);
+
+    .nav-item__icon {
+      color: var(--text-secondary);
+    }
   }
 
   &.is-active {
-    background: var(--bg-card);
+    background: color-mix(in srgb, var(--brand-500) 11%, transparent);
     color: var(--brand-700);
     font-weight: 600;
-    box-shadow: var(--shadow-card);
+
+    &::before {
+      opacity: 1;
+      transform: scaleY(1);
+    }
 
     .nav-item__icon {
       color: var(--brand-500);
@@ -382,8 +413,10 @@ function startResize(event: MouseEvent): void {
 }
 
 .nav-item__icon {
-  font-size: 16px;
-  flex: 0 0 16px;
+  font-size: 17px;
+  flex: 0 0 17px;
+  color: var(--text-tertiary);
+  transition: color $duration-fast $ease-out;
 }
 
 .nav-item__text {
@@ -394,8 +427,30 @@ function startResize(event: MouseEvent): void {
   text-overflow: ellipsis;
 }
 
+/* 分组头：可折叠，含当前页时只染文字不染底色 */
+.nav-group__header {
+  color: var(--text-secondary);
+
+  &.is-open {
+    color: var(--text-primary);
+
+    .nav-item__icon {
+      color: var(--text-secondary);
+    }
+  }
+
+  &.is-current {
+    color: var(--brand-600);
+    font-weight: 600;
+
+    .nav-item__icon {
+      color: var(--brand-500);
+    }
+  }
+}
+
 .nav-group__arrow {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
   transition: transform $duration-fast $ease-out;
 }
@@ -405,56 +460,86 @@ function startResize(event: MouseEvent): void {
 }
 
 .nav-group__body {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin: 2px 0 4px;
-  padding-left: 14px;
+  gap: 3px;
+  margin: 4px 0 6px;
+  padding-left: 26px;
+
+  /* 竖向层级导轨，子项圆点落在导轨上 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 17px;
+    width: 1px;
+    background: var(--border-strong);
+    opacity: 0.7;
+  }
 }
 
 .nav-subitem {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 32px;
-  padding: 0 10px 0 16px;
-  border-radius: 9px;
+  height: 31px;
+  padding: 0 8px;
+  border-radius: 8px;
   color: var(--text-secondary);
   font-size: 12.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition:
+    background $duration-fast $ease-out,
+    color $duration-fast $ease-out;
+
+  /* 圆点必须落在导轨上，所以不能裁切子项盒子 */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -10px;
+    width: 5px;
+    height: 5px;
+    margin-top: -2.5px;
+    border-radius: 50%;
+    background: var(--border-strong);
+    transition:
+      background $duration-fast $ease-out,
+      box-shadow $duration-fast $ease-out;
+  }
 
   &:hover {
-    color: var(--text-primary);
     background: var(--surface-soft);
+    color: var(--text-primary);
+
+    &::before {
+      background: var(--text-tertiary);
+    }
   }
 
   &.is-active {
-    color: var(--brand-600);
+    background: color-mix(in srgb, var(--brand-500) 10%, transparent);
+    color: var(--brand-700);
     font-weight: 600;
+
+    &::before {
+      background: var(--brand-500);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 20%, transparent);
+    }
   }
 }
 
-.nav-subitem__dot {
-  position: absolute;
-  left: 6px;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0.4;
-}
-
-.nav-subitem.is-active .nav-subitem__dot {
-  opacity: 1;
-  box-shadow: 0 0 0 3px rgba(53, 199, 155, 0.16);
+.nav-subitem__text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-divider {
   height: 1px;
-  margin: 10px 8px;
+  margin: 12px 10px 10px;
   background: linear-gradient(90deg, transparent, var(--border-strong), transparent);
 }
 

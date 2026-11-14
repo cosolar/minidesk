@@ -5,14 +5,14 @@
 // 运行期颜色统一走 var(--xxx)，定义在 styles/theme.scss。
 // ============================================================
 
-// 品牌主色 —— 薄荷绿
-$brand-50: #f0fbf7;
-$brand-100: #e3f7ef;
-$brand-200: #c6efe1;
-$brand-400: #5fe0be;
-$brand-500: #35c79b;
-$brand-600: #23a981;
-$brand-700: #17795d;
+// 品牌主色 —— 青绿（取品牌 logo 圆底 #0B7D77）
+$brand-50: #eef7f6;
+$brand-100: #dcefed;
+$brand-200: #b9dfdb;
+$brand-400: #3f9d96;
+$brand-500: #0b7d77;
+$brand-600: #08645f;
+$brand-700: #054a46;
 
 // 文字
 $text-primary: #1b2a32;
@@ -72,7 +72,19 @@ $duration-base: 220ms;
 
 // ---------- mixins ----------
 
+// 玻璃卡片：半透明底 + 背景模糊。页面底色带品牌色晕染，玻璃质感才看得出来
 @mixin card($radius: $radius-xl) {
+  background: color-mix(in srgb, var(--bg-card) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 72%, var(--bg-card));
+  border-radius: $radius;
+  box-shadow: var(--shadow-card);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+}
+
+// 承载 position: fixed 子元素的卡片（如 Markdown 编辑器全屏）：
+// backdrop-filter 会成为 fixed 的包含块，把全屏层裁在卡片里，这类卡片必须用不透明底
+@mixin card-solid($radius: $radius-xl) {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: $radius;

@@ -65,7 +65,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 
 ```
 前端  Vue 3.5 · TypeScript · Vite 8 · Element Plus 2 · Vue Router 4 · Pinia 2
-      @tanstack/vue-query（服务端状态） · Axios · Vditor 4 · Sass
+      @tanstack/vue-query（服务端状态） · Axios · ByteMD 1.22（编辑器） · Vditor 4（知识库只读预览） · Sass
       @iconify/vue · @element-plus/icons-vue · NProgress · Dayjs · VueUse
 
 后端  JDK 17 · Spring Boot 3.5 · Spring Web / Validation / Cache / Mail
@@ -336,7 +336,7 @@ const emit = defineEmits<{ toggle: [id: string, done: boolean] }>()
 
 ### 7.6 编辑器
 
-所有 Markdown 场景（笔记、会议纪要、复盘、读书笔记、日记）**必须**用 `shared/components/MarkdownEditor.vue`，禁止二次封装或直接引 Vditor。
+所有 Markdown 场景（笔记、会议纪要、复盘、读书笔记、日记）**必须**用 `shared/components/MarkdownEditor.vue`（底层 ByteMD），禁止二次封装或直接引 `bytemd` / `vditor`。
 
 ---
 

@@ -49,9 +49,37 @@ function onToggleSidebar(): void {
 
 <style scoped lang="scss">
 .layout {
+  position: relative;
+  isolation: isolate;
   display: flex;
   min-height: 100vh;
   background: var(--bg-page);
+
+  // 品牌色晕染：纯色底上做玻璃卡片会像「白盒子」，加一层很淡的色雾，
+  // 卡片后面的模糊才有内容可糊，层次和冷暖也更接近设计稿
+  &::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(
+        780px 460px at 6% -12%,
+        color-mix(in srgb, var(--brand-400) 26%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        680px 420px at 96% -6%,
+        color-mix(in srgb, var(--brand-500) 18%, transparent),
+        transparent 72%
+      ),
+      radial-gradient(
+        720px 520px at 82% 108%,
+        color-mix(in srgb, var(--brand-400) 16%, transparent),
+        transparent 74%
+      );
+  }
 }
 
 .layout__main {

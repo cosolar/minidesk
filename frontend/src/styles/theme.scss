@@ -25,13 +25,15 @@
 // ============================================================
 :root,
 [data-theme='mint'] {
-  --brand-50: #f0fbf7;
-  --brand-100: #e3f7ef;
-  --brand-200: #c6efe1;
-  --brand-400: #5fe0be;
-  --brand-500: #35c79b;
-  --brand-600: #23a981;
-  --brand-700: #17795d;
+  --brand-50: #eef7f6;
+  --brand-100: #dcefed;
+  --brand-200: #b9dfdb;
+  --brand-400: #3f9d96;
+  --brand-500: #0b7d77;
+  --brand-600: #08645f;
+  --brand-700: #054a46;
+  /* 品牌 logo 本身就是这个青绿色，无需再染色 */
+  --logo-filter: none;
 
   --text-primary: #1b2a32;
   --text-secondary: #6b7c87;
@@ -79,7 +81,7 @@
       rgba(250, 253, 252, 0) 78%
     ),
     linear-gradient(180deg, rgba(250, 253, 252, 0.5) 0%, rgba(250, 253, 252, 0) 26%);
-  --hero-tint: linear-gradient(180deg, rgba(53, 199, 155, 0.05) 0%, rgba(53, 199, 155, 0) 60%);
+  --hero-tint: linear-gradient(180deg, rgba(11, 125, 119, 0.05) 0%, rgba(11, 125, 119, 0) 60%);
   --hero-tint-blend: normal;
   --hero-tint-opacity: 1;
   --hero-title: #14313a;
@@ -96,7 +98,82 @@
 }
 
 // ============================================================
-// 2. 紫色 · 极简风格
+// 2. 蔚蓝 · 澄澈风格
+// ============================================================
+[data-theme='blue'] {
+  --brand-50: #f0f6ff;
+  --brand-100: #dfeeff;
+  --brand-200: #c3ddff;
+  --brand-400: #5c9bfa;
+  --brand-500: #1772f6;
+  --logo-filter: hue-rotate(46deg) saturate(1.7) brightness(0.95);
+  --brand-600: #0f5edd;
+  --brand-700: #0b47ab;
+
+  --text-primary: #17233a;
+  --text-secondary: #64748f;
+  --text-tertiary: #9aa8c0;
+  --text-inverse: #ffffff;
+
+  --bg-page: #f3f7fd;
+  --bg-card: #ffffff;
+  --bg-subtle: #f7fafe;
+  --bg-hover: #eef5ff;
+  --border-color: #e6eef9;
+  --border-strong: #d3e1f4;
+
+  --c-work: #1772f6;
+  --c-work-bg: #eaf2ff;
+  --c-study: #8b7cf6;
+  --c-study-bg: #f2effe;
+  --c-life: #ff9f43;
+  --c-life-bg: #fff4e7;
+  --c-alert: #ff6b6b;
+  --c-alert-bg: #fff0f0;
+
+  --shadow-card: 0 8px 24px rgba(21, 62, 122, 0.06);
+  --shadow-card-hover: 0 14px 34px rgba(21, 62, 122, 0.13);
+  --shadow-float: 0 10px 30px rgba(21, 62, 122, 0.11);
+
+  --sidebar-bg-from: #fbfdff;
+  --sidebar-bg-to: #eef5ff;
+  --header-bg: rgba(250, 253, 255, 0.86);
+
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-border: rgba(255, 255, 255, 0.74);
+  --surface-glass: rgba(255, 255, 255, 0.86);
+  --surface-glass-strong: rgba(255, 255, 255, 0.96);
+  --surface-soft: rgba(255, 255, 255, 0.62);
+  --row-hover: #f6faff;
+
+  --hero-photo-filter: saturate(0.58) brightness(1.05) contrast(1.02);
+  --hero-photo-opacity: 1;
+  --hero-haze: radial-gradient(
+      60% 120% at 3% 44%,
+      rgba(246, 250, 255, 0.95) 0%,
+      rgba(246, 250, 255, 0.6) 44%,
+      rgba(246, 250, 255, 0) 80%
+    ),
+    linear-gradient(180deg, rgba(246, 250, 255, 0.5) 0%, rgba(246, 250, 255, 0) 28%);
+  /* 与紫色主题同一手法：color 混色只改照片色相，不额外盖一层蓝玻璃 */
+  --hero-tint: linear-gradient(180deg, #9ec2ff 0%, #4f92fa 55%, #1772f6 100%);
+  --hero-tint-blend: color;
+  --hero-tint-opacity: 0.52;
+  --hero-title: #142544;
+  --hero-sub: #4d6382;
+  --hero-fade-mid: rgba(243, 247, 253, 0.72);
+  --login-veil: linear-gradient(
+    180deg,
+    rgba(247, 250, 255, 0.94) 0%,
+    rgba(247, 250, 255, 0.6) 24%,
+    rgba(24, 78, 154, 0.16) 50%,
+    rgba(13, 42, 84, 0.5) 100%
+  );
+  --footer-art-filter: saturate(0.6) hue-rotate(-12deg) brightness(1.04);
+}
+
+// ============================================================
+// 3. 紫色 · 极简风格
 // ============================================================
 [data-theme='violet'] {
   --brand-50: #f5f3ff;
@@ -104,6 +181,7 @@
   --brand-200: #dad2fc;
   --brand-400: #a495fa;
   --brand-500: #7b6cf6;
+  --logo-filter: hue-rotate(78deg) saturate(1.1) brightness(1.1);
   --brand-600: #6a58e8;
   --brand-700: #4f3fc4;
 
@@ -170,7 +248,7 @@
 }
 
 // ============================================================
-// 3. 深色 · 星空主题
+// 4. 深色 · 星空主题
 // ============================================================
 [data-theme='night'],
 [data-theme='dark'] {
@@ -179,6 +257,7 @@
   --brand-200: #2a3454;
   --brand-400: #8ba2ff;
   --brand-500: #6e8bff;
+  --logo-filter: hue-rotate(66deg) saturate(1.5) brightness(1.35);
   --brand-600: #8ba2ff;
   --brand-700: #b3c3ff;
 
@@ -255,7 +334,7 @@
 }
 
 // ============================================================
-// 4. 暖色 · 温馨主题
+// 5. 暖色 · 温馨主题
 // ============================================================
 [data-theme='warm'] {
   --brand-50: #fdf6ee;
@@ -263,6 +342,7 @@
   --brand-200: #f6d7b6;
   --brand-400: #eba96b;
   --brand-500: #e2924e;
+  --logo-filter: hue-rotate(-142deg) saturate(0.72) brightness(1.4);
   --brand-600: #cc7c3a;
   --brand-700: #a05f28;
 
@@ -328,7 +408,7 @@
 }
 
 // ============================================================
-// 5. 简约 · 纯净主题
+// 6. 简约 · 纯净主题
 // ============================================================
 [data-theme='pure'] {
   --brand-50: #f1f8f5;
@@ -336,6 +416,7 @@
   --brand-200: #cfe7df;
   --brand-400: #6ebba5;
   --brand-500: #2f9e7e;
+  --logo-filter: hue-rotate(-18deg) saturate(0.7) brightness(1.2);
   --brand-600: #268468;
   --brand-700: #1c6551;
 
@@ -404,15 +485,27 @@
 // Element Plus 主色（每套主题一组，含 6 个派生色）
 // ============================================================
 html[data-theme='mint'] {
-  --el-color-primary: #35c79b;
-  --el-color-primary-light-3: #71d8b9;
-  --el-color-primary-light-5: #9ae3cd;
-  --el-color-primary-light-7: #c2eee1;
-  --el-color-primary-light-8: #d6f4eb;
-  --el-color-primary-light-9: #ebf9f5;
-  --el-color-primary-dark-2: #2a9f7c;
-  --el-color-success: #35c79b;
-  --el-color-success-light-9: #ebf9f5;
+  --el-color-primary: #0b7d77;
+  --el-color-primary-light-3: #54a4a0;
+  --el-color-primary-light-5: #85bebb;
+  --el-color-primary-light-7: #b6d8d6;
+  --el-color-primary-light-8: #cee5e4;
+  --el-color-primary-light-9: #e7f2f1;
+  --el-color-primary-dark-2: #09645f;
+  --el-color-success: #0b7d77;
+  --el-color-success-light-9: #e7f2f1;
+}
+
+html[data-theme='blue'] {
+  --el-color-primary: #1772f6;
+  --el-color-primary-light-3: #5c9bfa;
+  --el-color-primary-light-5: #8bb9fb;
+  --el-color-primary-light-7: #bad6fd;
+  --el-color-primary-light-8: #d1e3fe;
+  --el-color-primary-light-9: #e8f1fe;
+  --el-color-primary-dark-2: #125bbf;
+  --el-color-success: #1772f6;
+  --el-color-success-light-9: #e8f1fe;
 }
 
 html[data-theme='violet'] {

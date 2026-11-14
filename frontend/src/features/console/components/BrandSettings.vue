@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Picture, Upload } from '@element-plus/icons-vue'
 import { siteApi } from '@/core/api/site'
 import { useSiteStore } from '@/core/stores/site'
+import BrandLogo from '@/shared/components/BrandLogo.vue'
 
 const siteStore = useSiteStore()
 
@@ -12,9 +13,6 @@ const savingName = ref(false)
 const uploading = ref<'logo' | 'logo-wide' | null>(null)
 const wideInput = ref<HTMLInputElement>()
 const markInput = ref<HTMLInputElement>()
-
-const wideLogo = computed(() => siteStore.logoWideUrl || siteStore.wideLogo)
-const markLogo = computed(() => siteStore.logoUrl || siteStore.markLogo)
 
 async function saveName(): Promise<void> {
   if (!siteName.value.trim()) {
@@ -76,7 +74,7 @@ async function remove(kind: 'logo' | 'logo-wide'): Promise<void> {
       <h3>横版 Logo</h3>
       <p>用于侧栏展开态与登录页，建议 3:1，高度 26px 左右最清晰。</p>
       <div class="brand__preview brand__preview--wide">
-        <img :src="wideLogo" alt="横版 logo" />
+        <BrandLogo mode="wide" />
       </div>
       <div class="brand__row">
         <el-button :icon="Upload" :loading="uploading === 'logo-wide'" @click="wideInput?.click()">
@@ -91,7 +89,7 @@ async function remove(kind: 'logo' | 'logo-wide'): Promise<void> {
       <h3>方形 Logo</h3>
       <p>用于侧栏收起态与 favicon，建议正方形。</p>
       <div class="brand__preview brand__preview--mark">
-        <img :src="markLogo" alt="方形 logo" />
+        <BrandLogo mode="mark" />
       </div>
       <div class="brand__row">
         <el-button :icon="Upload" :loading="uploading === 'logo'" @click="markInput?.click()">

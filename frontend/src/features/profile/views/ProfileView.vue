@@ -287,7 +287,7 @@ async function onAvatarChange(event: Event): Promise<void> {
   border-radius: 28px;
   overflow: hidden;
   cursor: pointer;
-  background: linear-gradient(145deg, #7fe3c6, #35c79b);
+  background: linear-gradient(145deg, var(--brand-400), var(--brand-500));
   color: #fff;
   font-size: 32px;
   font-weight: 600;

@@ -59,7 +59,7 @@
 }
 
 .el-card {
-  border-radius: var(--radius-xl);
+  border-radius: $radius-xl;
 }
 
 // 弹窗圆角与阴影
@@ -90,4 +90,260 @@
   --el-table-border-color: var(--border-color);
   --el-table-header-bg-color: var(--bg-subtle);
   --el-table-row-hover-bg-color: var(--bg-hover);
+}
+
+// ── 日期 / 时间选择器 ───────────────────────────────────────────────
+// 面板浮层：圆角、留白、投影统一到设计 token，避免默认样式的直角与灰边
+.el-picker__popper.el-popper {
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-float);
+  // 不能加 overflow: hidden：日期时间选择器的时间面板是绝对定位、横向伸出
+  // 日历面板的，裁掉会把右侧一列和「确定」按钮切掉；圆角交给 .el-picker-panel
+
+  .el-popper__arrow::before {
+    border-color: var(--border-color);
+    background: var(--bg-card);
+  }
+}
+
+.el-picker-panel {
+  padding: 10px 12px 12px;
+  border: none;
+  border-radius: $radius-lg;
+  background: var(--bg-card);
+  color: var(--text-primary);
+
+  // 面板头：月份/年份标题与左右翻页按钮
+  .el-date-picker__header {
+    margin: 4px 0 10px;
+    padding: 0 26px;
+  }
+
+  .el-date-picker__header-label,
+  .el-date-range-picker__header-label {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 14px;
+    transition: color $duration-fast $ease-out;
+
+    &:hover,
+    &.active {
+      color: var(--brand-600);
+    }
+  }
+
+  .el-picker-panel__icon-btn {
+    color: var(--text-tertiary);
+    border-radius: 8px;
+    transition:
+      color $duration-fast $ease-out,
+      background-color $duration-fast $ease-out;
+
+    &:hover {
+      color: var(--brand-600);
+      background: var(--bg-hover);
+    }
+  }
+
+  // 星期行
+  .el-date-table th {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-tertiary);
+    font-weight: 500;
+    font-size: 12px;
+  }
+
+  // 日期单元格
+  .el-date-table td {
+    padding: 2px 0;
+  }
+
+  .el-date-table td .el-date-table-cell {
+    height: 34px;
+    padding: 2px 0;
+  }
+
+  .el-date-table td .el-date-table-cell__text {
+    width: 30px;
+    height: 30px;
+    line-height: 30px;
+    border-radius: 9px;
+    font-size: 13px;
+    transition:
+      background-color $duration-fast $ease-out,
+      color $duration-fast $ease-out,
+      box-shadow $duration-fast $ease-out;
+  }
+
+  .el-date-table td.next-month .el-date-table-cell__text,
+  .el-date-table td.prev-month .el-date-table-cell__text {
+    color: var(--text-tertiary);
+    opacity: 0.55;
+  }
+
+  .el-date-table td.available:hover .el-date-table-cell__text {
+    background: var(--bg-hover);
+    color: var(--brand-600);
+  }
+
+  .el-date-table td.today .el-date-table-cell__text {
+    color: var(--brand-600);
+    font-weight: 700;
+    box-shadow: inset 0 0 0 1px var(--brand-200);
+  }
+
+  .el-date-table td.current:not(.disabled) .el-date-table-cell__text {
+    background: linear-gradient(135deg, var(--brand-400), var(--brand-500));
+    color: #fff;
+    font-weight: 600;
+    box-shadow: 0 4px 10px color-mix(in srgb, var(--brand-500) 32%, transparent);
+  }
+
+  // 区间选择：起止日与中间范围
+  .el-date-table td.start-date .el-date-table-cell__text,
+  .el-date-table td.end-date .el-date-table-cell__text {
+    background: var(--brand-500);
+    color: #fff;
+  }
+
+  .el-date-table td.in-range .el-date-table-cell {
+    background: var(--brand-100);
+  }
+
+  .el-date-table td.in-range .el-date-table-cell__text {
+    color: var(--brand-700);
+  }
+
+  // 月 / 年选择表格
+  .el-month-table td .cell,
+  .el-year-table td .cell {
+    border-radius: 9px;
+    color: var(--text-primary);
+    transition:
+      background-color $duration-fast $ease-out,
+      color $duration-fast $ease-out;
+
+    &:hover {
+      color: var(--brand-600);
+      background: var(--bg-hover);
+    }
+  }
+
+  .el-month-table td.current:not(.disabled) .cell,
+  .el-year-table td.current:not(.disabled) .cell {
+    background: linear-gradient(135deg, var(--brand-400), var(--brand-500));
+    color: #fff;
+    font-weight: 600;
+  }
+
+  // 页脚：此刻 / 确定
+  .el-picker-panel__footer {
+    margin: 8px -12px -12px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border-color);
+    border-radius: 0 0 $radius-lg $radius-lg;
+    background: var(--bg-subtle);
+  }
+
+  .el-picker-panel__footer .el-button--text {
+    color: var(--brand-600);
+
+    &:hover {
+      color: var(--brand-500);
+    }
+  }
+
+  // 日期时间选择器顶部的输入行
+  .el-date-picker__time-header {
+    padding: 2px 0 10px;
+    border-bottom: 1px solid var(--border-color);
+
+    .el-input__wrapper {
+      border-radius: 8px;
+      background: var(--bg-subtle);
+      box-shadow: none;
+    }
+
+    .el-input__wrapper.is-focus {
+      background: var(--bg-card);
+      box-shadow: 0 0 0 1px var(--brand-400) inset;
+    }
+
+    .el-input__inner {
+      font-size: 12px;
+    }
+  }
+
+  // 时间面板是绝对定位挂在「选择时间」输入框上的，默认 left: 0 会向右溢出浮层，
+  // 与大日历叠在一起、右侧还被切掉。改成对齐输入框右边界，整块落在面板内
+  .el-date-picker__editor-wrap .el-time-panel {
+    right: 0;
+    left: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-card);
+    box-shadow: var(--shadow-float);
+  }
+
+  // 快捷侧栏（含「今天 / 本周 / 本月」等 shortcuts）
+  .el-picker-panel__sidebar {
+    border-right: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+  }
+
+  .el-picker-panel__shortcut {
+    color: var(--text-secondary);
+    font-size: 13px;
+    transition:
+      color $duration-fast $ease-out,
+      background-color $duration-fast $ease-out;
+
+    &:hover {
+      color: var(--brand-600);
+      background: var(--brand-50);
+    }
+  }
+}
+
+// 时间面板：选中项跟随主色
+.el-time-panel {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow-float);
+
+  .el-time-panel__content::before,
+  .el-time-panel__content::after {
+    border-color: var(--border-color);
+  }
+
+  .el-time-spinner__item {
+    color: var(--text-secondary);
+
+    &:hover:not(.is-disabled) {
+      background: var(--bg-hover);
+    }
+
+    &.is-active:not(.is-disabled) {
+      color: var(--brand-600);
+      font-weight: 600;
+    }
+  }
+
+  .el-time-panel__footer {
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-subtle);
+  }
+
+  .el-time-panel__btn {
+    color: var(--text-secondary);
+
+    &.confirm {
+      color: var(--brand-600);
+      font-weight: 600;
+    }
+  }
 }
