@@ -7,52 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- Quartz scheduling with four built-in jobs (reminder scan, journal drafts,
-  automatic backup, log cleanup). Job definitions and execution history are
-  persisted; the admin console supports cron editing, enable/disable, manual
-  trigger and log browsing. Triggers are rebuilt on startup.
-- Backup and restore: consistent SQLite snapshots via `VACUUM INTO`, ZIP bundles
-  containing uploads, branding and the integration secret, download / delete /
-  upload, and pre-startup restore with Zip Slip protection, integrity checks and
-  automatic rollback to the previous database.
-- Audit logging AOP: every write endpoint is recorded with masked parameters,
-  outcome, duration, IP, user agent and traceId; console filtering and detail view.
-- Single-jar distribution via `mvn -Psingle-jar package` and
-  `scripts/build_single_jar.py`, with conditional SPA route forwarding.
-- Dedicated mobile TabBar and a compact mobile header.
-- `sys_schedule_job` table (60 tables total) and `job_exec_log.message`.
-- Correct 404 / 405 / 400 responses for missing resources and malformed requests.
-- Docker single-image distribution: multi-stage Node 22 / Maven 3.9 / JRE 17 build,
-  `deploy/docker-compose.yml`, a non-root runtime with a `/data` volume and healthcheck,
-  and a GitHub Actions workflow publishing to Docker Hub on `v*` tags while only
-  validating builds on `main`.
-- MiniDocs knowledge base integration: server-side proxy with `mdt_` bearer tokens
-  stored encrypted, "my libraries" and public portal browsing, document tree and
-  content preview, tree-based document search, note publishing and connection test.
-  Supports `MINIDESK_MINIDOCS_TOKEN` for first-start import.
-
-### Changed
-
-- Renamed the work-section link collection from "工具" to "书签" (a two-character
-  label matching the other menu items); the route stays `/work/tool` so existing
-  links keep working.
-
-### Fixed
-
-- MyBatis SQL logging no longer writes encrypted integration secrets (weather key,
-  knowledge base token) into console logs; `NoLoggingImpl` is now the default.
-- `MINIDESK_DATA_DIR` now moves the main SQLite database as well: the datasource
-  URL derives from `minidesk.data-dir`, and the directory is created before the
-  connection pool starts, so a single jar launched from an empty directory no
-  longer fails with `SQLITE_CANTOPEN`.
-
 ### Planned
 
 - MySQL / PostgreSQL runtime profile and dialect-safe schema upgrades
 - Tauri desktop shell, offline icon set and data import
 - Automated test coverage, per-page visual polish and clustered scheduling
+
+## [0.1.1] - 2026-11-14
+
+### Added
+
+- Password-protected public note sharing: an owner creates a share link with an
+  optional password, visitors read a standalone page without logging in, and
+  shares can be revoked at any time.
+- The knowledge base page is now a guide surface: a card wall of all libraries
+  with counts, filters and view switch, opening the third-party knowledge site in
+  a new tab instead of editing documents inside MiniDesk.
+
+### Changed
+
+- Refreshed the interface with translucent glass surfaces, ambient brand
+  gradients, a themed favicon and a fully themed date/time picker.
+- Markdown editing now runs on ByteMD through a shared editor component, with a
+  fixed full-screen mode and a standalone read-only preview component.
 
 ## [0.1.0] - 2026-11-12
 
@@ -78,6 +55,28 @@ tasks, calendar, notes and search, plus isolated multi-account data.
 - Self-service registration by username or email code; the first registrant
   claims the admin role, protected by an optional claim token
 - Personal center with avatar, nickname, email and password management
+- Quartz scheduling with four built-in jobs (reminder scan, journal drafts,
+  automatic backup, log cleanup). Job definitions and execution history are
+  persisted; the admin console supports cron editing, enable/disable, manual
+  trigger and log browsing. Triggers are rebuilt on startup.
+- Backup and restore: consistent SQLite snapshots via `VACUUM INTO`, ZIP bundles
+  containing uploads, branding and the integration secret, download / delete /
+  upload, and pre-startup restore with Zip Slip protection, integrity checks and
+  automatic rollback to the previous database.
+- Audit logging AOP: every write endpoint is recorded with masked parameters,
+  outcome, duration, IP, user agent and traceId; console filtering and detail view.
+- Single-jar distribution via `mvn -Psingle-jar package` and
+  `scripts/build_single_jar.py`, with conditional SPA route forwarding.
+- Docker single-image distribution: multi-stage Node 22 / Maven 3.9 / JRE 17 build,
+  `deploy/docker-compose.yml`, a non-root runtime with a `/data` volume and healthcheck,
+  and a GitHub Actions workflow publishing to Docker Hub on `v*` tags while only
+  validating builds on `main`.
+- MiniDocs knowledge base integration: server-side proxy with `mdt_` bearer tokens
+  stored encrypted, "my libraries" and public portal browsing, document tree and
+  content preview, tree-based document search, note publishing and connection test.
+  Supports `MINIDESK_MINIDOCS_TOKEN` for first-start import.
+- Dedicated mobile TabBar and a compact mobile header, plus `sys_schedule_job`
+  (60 tables total) and `job_exec_log.message`.
 
 #### Product
 
@@ -104,6 +103,21 @@ tasks, calendar, notes and search, plus isolated multi-account data.
 - Development blueprint, database design, REST API contract, deployment guide,
   agent/code conventions (`AGENTS.md`), contribution and security guides
 
+### Changed
+
+- Renamed the work-section link collection from "工具" to "书签" (a two-character
+  label matching the other menu items); the route stays `/work/tool` so existing
+  links keep working.
+
+### Fixed
+
+- MyBatis SQL logging no longer writes encrypted integration secrets (weather key,
+  knowledge base token) into console logs; `NoLoggingImpl` is now the default.
+- `MINIDESK_DATA_DIR` now moves the main SQLite database as well: the datasource
+  URL derives from `minidesk.data-dir`, and the directory is created before the
+  connection pool starts, so a single jar launched from an empty directory no
+  longer fails with `SQLITE_CANTOPEN`.
+
 ### Known limitations
 
 - MySQL / PostgreSQL runtime support is not implemented yet; the MySQL and
@@ -115,5 +129,6 @@ tasks, calendar, notes and search, plus isolated multi-account data.
   clustered scheduling and misfire recovery are not supported.
 - Iconify icons may require an offline icon set when the device has no network.
 
-[Unreleased]: https://github.com/cosolar/minidesk/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/cosolar/minidesk/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/cosolar/minidesk/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cosolar/minidesk/releases/tag/v0.1.0
