@@ -1,28 +1,38 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
+import { computed, ref } from 'vue'
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
-import { Document, FolderOpened, Link, Plus, Refresh } from '@element-plus/icons-vue'
-import { useDebounceFn } from '@vueuse/core'
-import { kbApi, type KbDocNode, type KbScope } from '../api'
+import {
+  ArrowRight,
+  Collection,
+  Document,
+  Grid,
+  Link,
+  List,
+  Lock,
+  Refresh,
+  Search,
+  Share,
+} from '@element-plus/icons-vue'
+import { kbApi, type KbBook } from '../api'
 
-interface TreeNode {
-  label: string
-  path: string
-  type: string
-  children?: TreeNode[]
-}
+type FilterKey = 'all' | 'shared' | 'private'
+type SortKey = 'updated' | 'docs'
+type ViewMode = 'grid' | 'list'
 
 const queryClient = useQueryClient()
 
-const scope = ref<KbScope>('mine')
+const filter = ref<FilterKey>('all')
+const sortBy = ref<SortKey>('updated')
+const viewMode = ref<ViewMode>('grid')
 const keyword = ref('')
-const docKeyword = ref('')
-const searchKeyword = ref('')
-const selectedSlug = ref('')
-const selectedPath = ref('')
-const previewHost = ref<HTMLDivElement>()
-const darkMode = ref(false)
+const brokenCovers = ref<Set<string>>(new Set())
+
+const tabs: { key: FilterKey; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'shared', label: '分享' },
+  { key: 'private', label: '加密' },
+]
 
 const statusQuery = useQuery({
   queryKey: ['kb', 'status'],
@@ -30,443 +40,274 @@ const statusQuery = useQuery({
   staleTime: 60_000,
 })
 
-const booksQuery = useQuery({
-  queryKey: ['kb', 'books', scope, keyword],
-  queryFn: () =>
-    kbApi.books({ scope: scope.value, keyword: keyword.value || undefined, size: 50 }),
-  staleTime: 60_000,
-})
-
-const books = computed(() => booksQuery.data.value?.list ?? [])
-const currentBook = computed(
-  () => books.value.find((item) => item.slug === selectedSlug.value) ?? null,
-)
-const org = computed(
-  () => currentBook.value?.orgSlug || statusQuery.data.value?.defaultOrg || '',
-)
 const status = computed(() => statusQuery.data.value)
-const connected = computed(() => Boolean(status.value?.configured && status.value?.connected))
-
-/** 个人库为空时自动展示站点公开库，避免第一次进来是一屏空白 */
-let autoSwitched = false
-watch(
-  () => booksQuery.data.value,
-  (page) => {
-    if (scope.value === 'mine' && page && page.list.length === 0 && !autoSwitched) {
-      autoSwitched = true
-      scope.value = 'public'
-    }
-  },
+const connected = computed(() =>
+  Boolean(status.value?.configured && status.value?.connected),
 )
 
-watch(scope, () => {
-  selectedSlug.value = ''
-  selectedPath.value = ''
-  docKeyword.value = ''
-  searchKeyword.value = ''
-})
-
-watch(
-  books,
-  (list) => {
-    if (!list.length) {
-      selectedSlug.value = ''
-      return
-    }
-    if (!list.some((item) => item.slug === selectedSlug.value)) {
-      selectedSlug.value = list[0].slug
-    }
-  },
-  { immediate: true },
-)
-
-const treeQuery = useQuery({
-  queryKey: ['kb', 'tree', scope, selectedSlug, org],
-  queryFn: () =>
-    kbApi.tree({ scope: scope.value, org: org.value || undefined, slug: selectedSlug.value }),
-  enabled: computed(() => Boolean(selectedSlug.value)),
+const publicQuery = useQuery({
+  queryKey: ['kb', 'books', 'public'],
+  queryFn: () => kbApi.books({ scope: 'public', size: 100 }),
   staleTime: 60_000,
 })
 
-function toTree(nodes: KbDocNode[]): TreeNode[] {
-  return nodes.map((node) => ({
-    label: node.name.toLowerCase().endsWith('.md') ? node.name.slice(0, -3) : node.name,
-    path: node.path,
-    type: node.type,
-    children: node.children?.length ? toTree(node.children) : undefined,
-  }))
+/** 配置了令牌才拉「我的知识库」，否则只会拿到 60060 报错 */
+const mineQuery = useQuery({
+  queryKey: ['kb', 'books', 'mine'],
+  queryFn: () => kbApi.books({ scope: 'mine', size: 100 }),
+  enabled: computed(() => connected.value),
+  staleTime: 60_000,
+  retry: false,
+})
+
+function bookKey(book: KbBook): string {
+  return `${book.orgSlug}/${book.slug}`
 }
 
-const treeData = computed(() => toTree(treeQuery.data.value ?? []))
-const expandedKeys = ref<string[]>([])
+function isShared(book: KbBook): boolean {
+  return book.scope === 'public' || book.visibility === 'public'
+}
 
-function firstDoc(nodes: KbDocNode[]): string {
-  for (const node of nodes) {
-    if (node.type === 'doc') {
-      return node.path
-    }
-    const found = firstDoc(node.children ?? [])
-    if (found) {
-      return found
+/** 我的库（含私有）优先，匿名公开库补齐其它组织，按「组织 + 库名」去重 */
+const allBooks = computed<KbBook[]>(() => {
+  const merged = new Map<string, KbBook>()
+  for (const book of mineQuery.data.value?.list ?? []) {
+    merged.set(bookKey(book), book)
+  }
+  for (const book of publicQuery.data.value?.list ?? []) {
+    const key = bookKey(book)
+    if (!merged.has(key)) {
+      merged.set(key, book)
     }
   }
-  return ''
-}
+  return [...merged.values()]
+})
 
-function hasPath(nodes: KbDocNode[], path: string): boolean {
-  return nodes.some(
-    (node) => node.path === path || hasPath(node.children ?? [], path),
+const sharedCount = computed(() => allBooks.value.filter(isShared).length)
+const privateCount = computed(() => allBooks.value.length - sharedCount.value)
+const docTotal = computed(() =>
+  allBooks.value.reduce((sum, book) => sum + book.docCount, 0),
+)
+
+const visibleBooks = computed<KbBook[]>(() => {
+  const needle = keyword.value.trim().toLowerCase()
+  const list = allBooks.value.filter((book) => {
+    if (filter.value === 'shared' && !isShared(book)) {
+      return false
+    }
+    if (filter.value === 'private' && isShared(book)) {
+      return false
+    }
+    if (!needle) {
+      return true
+    }
+    return [book.name, book.description, ...(book.tags ?? [])].some((text) =>
+      text.toLowerCase().includes(needle),
+    )
+  })
+  return list.sort((left, right) =>
+    sortBy.value === 'docs'
+      ? right.docCount - left.docCount
+      : right.updatedText.localeCompare(left.updatedText),
   )
-}
+})
 
-watch(
-  () => treeQuery.data.value,
-  (nodes) => {
-    if (!nodes) {
-      return
-    }
-    if (!selectedPath.value || !hasPath(nodes, selectedPath.value)) {
-      selectedPath.value = firstDoc(nodes)
-    }
-    expandedKeys.value = nodes.slice(0, 3).map((node) => node.path)
-  },
+/* 已有数据就不再切回骨架屏，避免 status 后到导致列表闪烁 */
+const isLoading = computed(
+  () =>
+    allBooks.value.length === 0 &&
+    (publicQuery.isLoading.value || mineQuery.isLoading.value),
+)
+const isFailed = computed(
+  () => publicQuery.isError.value && allBooks.value.length === 0,
 )
 
-const commitKeyword = useDebounceFn((value: string) => {
-  searchKeyword.value = value.trim()
-}, 300)
-watch(docKeyword, (value) => commitKeyword(value))
-
-const searchQuery = useQuery({
-  queryKey: ['kb', 'search', scope, selectedSlug, org, searchKeyword],
-  queryFn: () =>
-    kbApi.search({
-      scope: scope.value,
-      org: org.value || undefined,
-      slug: selectedSlug.value,
-      q: searchKeyword.value,
-      bookName: currentBook.value?.name,
-    }),
-  enabled: computed(
-    () => Boolean(selectedSlug.value && searchKeyword.value.length > 0),
-  ),
-  staleTime: 30_000,
-})
-
-const docQuery = useQuery({
-  queryKey: ['kb', 'doc', scope, selectedSlug, org, selectedPath],
-  queryFn: () =>
-    kbApi.doc({
-      scope: scope.value,
-      org: org.value || undefined,
-      slug: selectedSlug.value,
-      path: selectedPath.value,
-    }),
-  enabled: computed(() => Boolean(selectedSlug.value && selectedPath.value)),
-  staleTime: 0,
-})
-
-const doc = computed(() => docQuery.data.value)
-
-onMounted(() => {
-  darkMode.value = document.documentElement.dataset.theme === 'dark'
-  void import('vditor/dist/index.css')
-})
-
-/** Markdown 正文交给 Vditor 渲染；公开库的 html 由知识库服务端渲染好，直接展示 */
-watch(
-  doc,
-  async (value) => {
-    await nextTick()
-    if (!previewHost.value) {
-      return
-    }
-    previewHost.value.innerHTML = ''
-    if (!value?.markdown) {
-      return
-    }
-    const { default: VditorClass } = await import('vditor')
-    if (!previewHost.value) {
-      return
-    }
-    VditorClass.preview(previewHost.value, value.markdown, {
-      mode: darkMode.value ? 'dark' : 'light',
-    })
-  },
-  { flush: 'post' },
-)
-
-function onNodeClick(value: unknown): void {
-  const node = value as TreeNode
-  if (node.type === 'doc') {
-    selectedPath.value = node.path
-  }
+function markCoverBroken(id: string): void {
+  brokenCovers.value = new Set(brokenCovers.value).add(id)
 }
 
-function selectHit(hit: { path: string }): void {
-  selectedPath.value = hit.path
-  docKeyword.value = ''
-}
-
-function openExternal(url?: string): void {
-  if (!url) {
-    ElMessage.warning('暂无可打开的链接')
-    return
-  }
-  window.open(url, '_blank', 'noopener')
-}
-
-function refreshAll(): void {
+function refresh(): void {
   queryClient.invalidateQueries({ queryKey: ['kb'] })
 }
 
-const createBookVisible = ref(false)
-const bookForm = reactive({ name: '', description: '' })
-const createBookMutation = useMutation({
-  mutationFn: () =>
-    kbApi.createBook({ name: bookForm.name, description: bookForm.description }),
-  onSuccess: () => {
-    ElMessage.success('知识库已创建')
-    createBookVisible.value = false
-    bookForm.name = ''
-    bookForm.description = ''
-    scope.value = 'mine'
-    queryClient.invalidateQueries({ queryKey: ['kb', 'books'] })
-  },
-})
-
-const createDocVisible = ref(false)
-const docForm = reactive({ path: '', content: '' })
-const createDocMutation = useMutation({
-  mutationFn: () =>
-    kbApi.createDoc({
-      org: org.value || undefined,
-      slug: selectedSlug.value,
-      path: docForm.path,
-      content: docForm.content,
-    }),
-  onSuccess: (result) => {
-    ElMessage.success('文档已写入知识库')
-    createDocVisible.value = false
-    docForm.path = ''
-    docForm.content = ''
-    queryClient.invalidateQueries({ queryKey: ['kb', 'tree'] })
-    selectedPath.value = result.path
-    queryClient.invalidateQueries({ queryKey: ['kb', 'doc'] })
-  },
-})
-
-function openCreateDoc(): void {
-  if (!connected.value) {
-    ElMessage.warning('请先在设置页配置具备读写权限的访问令牌')
+function openSite(): void {
+  const siteUrl = status.value?.siteUrl
+  if (!siteUrl) {
+    ElMessage.warning('还没有配置知识库站点地址')
     return
   }
-  docForm.path = ''
-  docForm.content = ''
-  createDocVisible.value = true
+  window.open(siteUrl, '_blank', 'noopener')
 }
 </script>
 
 <template>
   <div class="kb-page">
     <header class="page-head">
-      <div>
-        <h1>知识库</h1>
-        <p class="page-head__sub">连接 docs.minims.cn，文档树与正文实时读取，不在应用内重复造一份</p>
+      <div class="page-head__main">
+        <h1>全部知识库</h1>
+        <p class="page-head__sub">
+          这里只负责引导，点击卡片在新标签页打开知识库站点；文档的读写都在第三方完成。
+        </p>
       </div>
-      <div class="page-head__actions">
-        <el-button :icon="Refresh" @click="refreshAll">刷新</el-button>
-        <el-button :icon="Link" @click="openExternal(status?.siteUrl)">打开站点</el-button>
-        <el-button v-if="scope === 'mine'" type="primary" :icon="Plus" @click="openCreateDoc">
-          新建文档
-        </el-button>
-      </div>
+      <ul class="kb-stats">
+        <li class="kb-stat">
+          <el-icon><Collection /></el-icon>
+          <b>{{ allBooks.length }}</b>
+          <span>知识库</span>
+        </li>
+        <li class="kb-stat">
+          <el-icon><Share /></el-icon>
+          <b>{{ sharedCount }}</b>
+          <span>分享</span>
+        </li>
+        <li class="kb-stat">
+          <el-icon><Lock /></el-icon>
+          <b>{{ privateCount }}</b>
+          <span>加密</span>
+        </li>
+        <li class="kb-stat">
+          <el-icon><Document /></el-icon>
+          <b>{{ docTotal }}</b>
+          <span>文档</span>
+        </li>
+      </ul>
     </header>
 
-    <section class="status-bar" :class="connected ? 'is-ok' : 'is-off'">
-      <div class="status-bar__main">
-        <span class="dot" />
-        <template v-if="connected">
-          已连接 · {{ status?.displayName || status?.username }} · 组织 {{ status?.defaultOrg }}
-        </template>
-        <template v-else>
-          {{ status?.message || '正在检查知识库连接' }}
-          （公开库无需令牌也可浏览）
-        </template>
+    <div class="kb-toolbar">
+      <div class="kb-tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          type="button"
+          class="kb-tabs__item"
+          :class="{ 'is-active': filter === tab.key }"
+          @click="filter = tab.key"
+        >
+          {{ tab.label }}
+        </button>
       </div>
-      <RouterLink v-if="!connected" to="/settings" class="status-bar__link">去设置</RouterLink>
-      <span v-else class="status-bar__site">{{ status?.apiHost }}</span>
-    </section>
 
-    <div class="scope-tabs">
-      <button
-        type="button"
-        :class="{ 'is-active': scope === 'mine' }"
-        @click="scope = 'mine'"
-      >
-        我的知识库
-      </button>
-      <button
-        type="button"
-        :class="{ 'is-active': scope === 'public' }"
-        @click="scope = 'public'"
-      >
-        站点公开库
-      </button>
-      <span class="scope-tabs__hint">
-        {{ scope === 'mine' ? '需要访问令牌，含私有库' : '匿名只读，仅已发布内容' }}
-      </span>
-    </div>
+      <el-input
+        v-model="keyword"
+        class="kb-search"
+        size="small"
+        placeholder="搜索知识库 / 标签"
+        clearable
+        :prefix-icon="Search"
+      />
 
-    <div class="kb-board">
-      <section class="kb-panel kb-panel--books">
-        <div class="kb-panel__head">
-          <h2>知识库</h2>
-          <el-button
-            v-if="scope === 'mine' && connected"
-            link
-            :icon="Plus"
-            @click="createBookVisible = true"
+      <div class="kb-toolbar__right">
+        <el-select v-model="sortBy" size="small" class="kb-sort">
+          <el-option label="最近更新" value="updated" />
+          <el-option label="文档最多" value="docs" />
+        </el-select>
+        <div class="kb-views">
+          <button
+            type="button"
+            :class="{ 'is-active': viewMode === 'grid' }"
+            title="网格视图"
+            @click="viewMode = 'grid'"
           >
-            新建
-          </el-button>
+            <el-icon><Grid /></el-icon>
+          </button>
+          <button
+            type="button"
+            :class="{ 'is-active': viewMode === 'list' }"
+            title="列表视图"
+            @click="viewMode = 'list'"
+          >
+            <el-icon><List /></el-icon>
+          </button>
         </div>
-        <el-input v-model="keyword" placeholder="搜索知识库名称" clearable size="small" />
-        <div class="kb-panel__body">
-          <el-skeleton v-if="booksQuery.isLoading.value" :rows="5" animated />
-          <ul v-else-if="books.length" class="book-list">
-            <li
-              v-for="book in books"
-              :key="book.id"
-              class="book-item"
-              :class="{ 'is-active': book.slug === selectedSlug }"
-              @click="selectedSlug = book.slug"
-            >
-              <div class="book-item__title">
-                <el-icon><FolderOpened /></el-icon>
-                <span>{{ book.name }}</span>
-              </div>
-              <p class="book-item__desc">{{ book.description || '暂无描述' }}</p>
-              <div class="book-item__meta">
-                <span>{{ book.docCount }} 篇</span>
-                <span>{{ book.visibility }}</span>
-              </div>
-            </li>
-          </ul>
-          <div v-else class="kb-empty">
-            <p>{{ scope === 'mine' ? '你还没有自己的知识库' : '没有匹配的知识库' }}</p>
-            <el-button v-if="scope === 'mine' && connected" size="small" @click="createBookVisible = true">
-              创建第一个
-            </el-button>
-            <el-button v-else-if="scope === 'mine'" size="small" @click="scope = 'public'">
-              看看站点公开库
-            </el-button>
-          </div>
-        </div>
-      </section>
-
-      <section class="kb-panel kb-panel--tree">
-        <div class="kb-panel__head">
-          <h2>目录</h2>
-          <span class="kb-panel__count">{{ treeQuery.data.value?.length ?? 0 }} 个顶层节点</span>
-        </div>
-        <el-input v-model="docKeyword" placeholder="搜索文档标题" clearable size="small" />
-        <div class="kb-panel__body">
-          <ul v-if="searchKeyword && searchQuery.data.value?.length" class="hit-list">
-            <li v-for="hit in searchQuery.data.value" :key="hit.path" @click="selectHit(hit)">
-              <el-icon><Document /></el-icon>
-              <span>{{ hit.title }}</span>
-            </li>
-          </ul>
-          <p v-else-if="searchKeyword && !searchQuery.isLoading.value" class="kb-tip">没有匹配的文档</p>
-          <el-skeleton v-else-if="treeQuery.isLoading.value" :rows="6" animated />
-          <el-tree
-            v-else-if="treeData.length"
-            :key="selectedSlug"
-            :data="treeData"
-            node-key="path"
-            :props="{ label: 'label', children: 'children' }"
-            :default-expanded-keys="expandedKeys"
-            :current-node-key="selectedPath"
-            highlight-current
-            :expand-on-click-node="false"
-            @node-click="onNodeClick"
-          />
-          <div v-else class="kb-empty">
-            <p>{{ selectedSlug ? '这个知识库还没有文档' : '先选一个知识库' }}</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="kb-panel kb-panel--doc">
-        <div class="kb-panel__head">
-          <div class="doc-title">
-            <h2>{{ doc?.title || doc?.name || '文档预览' }}</h2>
-            <p v-if="selectedPath" class="doc-title__path">{{ selectedPath }}</p>
-          </div>
-          <el-button v-if="doc" link :icon="Link" @click="openExternal(doc.sourceUrl)">
-            打开原文
-          </el-button>
-        </div>
-        <div class="kb-panel__body kb-preview-wrap">
-          <el-skeleton v-if="docQuery.isLoading.value" :rows="10" animated />
-          <div v-else-if="doc?.markdown" ref="previewHost" class="kb-preview vditor-reset" />
-          <div v-else-if="doc?.html" class="kb-preview vditor-reset" v-html="doc.html" />
-          <div v-else class="kb-empty">
-            <el-icon class="kb-empty__icon"><Document /></el-icon>
-            <p>从中间目录选一篇文档开始阅读</p>
-          </div>
-        </div>
-      </section>
+        <el-button size="small" :icon="Refresh" @click="refresh">刷新</el-button>
+        <el-button size="small" :icon="Link" @click="openSite">打开站点</el-button>
+      </div>
     </div>
 
-    <el-dialog v-model="createBookVisible" title="新建知识库" width="440px">
-      <p class="dialog-hint">会在知识库站点的默认组织下创建一个私有库。</p>
-      <el-input v-model="bookForm.name" placeholder="知识库名称" class="dialog-input" />
-      <el-input
-        v-model="bookForm.description"
-        type="textarea"
-        :rows="3"
-        placeholder="描述（可选）"
-        class="dialog-input"
-      />
-      <template #footer>
-        <el-button @click="createBookVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="createBookMutation.isPending.value"
-          :disabled="!bookForm.name.trim()"
-          @click="createBookMutation.mutate()"
-        >
-          创建
-        </el-button>
-      </template>
-    </el-dialog>
+    <p v-if="status && !connected" class="kb-hint">
+      {{ status.message || '知识库集成尚未启用' }}，当前只展示站点公开库；
+      <RouterLink to="/settings">去设置访问令牌</RouterLink>
+      后可看到自己的全部知识库。
+    </p>
 
-    <el-dialog v-model="createDocVisible" title="写入知识库文档" width="560px">
-      <p class="dialog-hint">
-        目标：{{ currentBook?.name || '未选择' }}。路径相对知识库根目录，.md 可省略。
+    <div v-if="isLoading" class="kb-wall" :class="`is-${viewMode}`">
+      <div v-for="index in 5" :key="index" class="kb-skeleton">
+        <el-skeleton animated>
+          <template #template>
+            <el-skeleton-item variant="image" class="kb-skeleton__cover" />
+            <div class="kb-skeleton__body">
+              <el-skeleton-item variant="h3" style="width: 62%" />
+              <el-skeleton-item variant="text" style="width: 90%" />
+              <el-skeleton-item variant="text" style="width: 48%" />
+            </div>
+          </template>
+        </el-skeleton>
+      </div>
+    </div>
+
+    <div v-else-if="visibleBooks.length" class="kb-wall" :class="`is-${viewMode}`">
+      <a
+        v-for="book in visibleBooks"
+        :key="bookKey(book)"
+        class="kb-card"
+        :href="book.url"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <div class="kb-card__cover">
+          <img
+            v-if="book.coverSrc && !brokenCovers.has(book.id)"
+            :src="book.coverSrc"
+            :alt="book.name"
+            loading="lazy"
+            @error="markCoverBroken(book.id)"
+          />
+          <span v-else class="kb-card__cover-fallback">{{ book.name.slice(0, 1) }}</span>
+          <span class="kb-card__badge" :class="isShared(book) ? 'is-shared' : 'is-private'">
+            <el-icon>
+              <Share v-if="isShared(book)" />
+              <Lock v-else />
+            </el-icon>
+            {{ isShared(book) ? '分享' : '加密' }}
+          </span>
+        </div>
+
+        <div class="kb-card__body">
+          <h3 class="kb-card__title">{{ book.name }}</h3>
+          <p class="kb-card__desc">{{ book.description || '暂无描述' }}</p>
+          <div v-if="book.tags?.length" class="kb-card__tags">
+            <span v-for="tag in book.tags.slice(0, 3)" :key="tag" class="kb-card__tag">
+              {{ tag }}
+            </span>
+          </div>
+        </div>
+
+        <div class="kb-card__foot">
+          <span class="kb-card__meta">
+            <el-icon><Document /></el-icon>
+            {{ book.docCount }} 篇
+          </span>
+          <span class="kb-card__meta kb-card__meta--time">{{ book.updatedText }}</span>
+          <span class="kb-card__go">
+            <el-icon><ArrowRight /></el-icon>
+          </span>
+        </div>
+      </a>
+    </div>
+
+    <div v-else class="kb-empty">
+      <el-icon class="kb-empty__icon"><Collection /></el-icon>
+      <p v-if="isFailed">知识库暂时无法访问，请稍后重试。</p>
+      <p v-else-if="filter === 'private' && !connected">
+        配置知识库访问令牌后，这里才会显示未公开的加密库。
       </p>
-      <el-input v-model="docForm.path" placeholder="例如 笔记/今日总结" class="dialog-input" />
-      <el-input
-        v-model="docForm.content"
-        type="textarea"
-        :rows="10"
-        placeholder="Markdown 正文"
-        class="dialog-input"
-      />
-      <template #footer>
-        <el-button @click="createDocVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="createDocMutation.isPending.value"
-          :disabled="!docForm.path.trim() || !docForm.content.trim() || !selectedSlug"
-          @click="createDocMutation.mutate()"
-        >
-          写入
-        </el-button>
-      </template>
-    </el-dialog>
+      <p v-else-if="keyword">没有匹配「{{ keyword }}」的知识库。</p>
+      <p v-else>还没有可展示的知识库。</p>
+      <div class="kb-empty__actions">
+        <el-button size="small" :icon="Refresh" @click="refresh">重新加载</el-button>
+        <el-button size="small" :icon="Link" @click="openSite">打开知识库站点</el-button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -482,7 +323,7 @@ function openCreateDoc(): void {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   flex-wrap: wrap;
 
   h1 {
@@ -492,212 +333,351 @@ function openCreateDoc(): void {
 }
 
 .page-head__sub {
+  max-width: 520px;
   margin-top: 4px;
   font-size: 12px;
+  line-height: 1.7;
   color: var(--text-secondary);
 }
 
-.page-head__actions {
+.kb-stats {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
 }
 
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-  border-radius: 12px;
-  font-size: 12px;
-  background: var(--c-warn-bg, rgba(234, 160, 60, 0.1));
-  color: var(--text-secondary);
-
-  &.is-ok {
-    background: var(--brand-50);
-    color: var(--brand-700);
-  }
-
-  .dot {
-    display: inline-block;
-    width: 7px;
-    height: 7px;
-    margin-right: 8px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-}
-
-.status-bar__link {
-  color: var(--brand-600);
-  white-space: nowrap;
-}
-
-.status-bar__site {
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.scope-tabs {
-  display: flex;
+.kb-stat {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-card) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, var(--bg-card));
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+
+  .el-icon {
+    color: var(--brand-500);
+    font-size: 13px;
+  }
+
+  b {
+    font-family: var(--font-number);
+    font-size: 14px;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.kb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  @include card($radius-lg);
+}
+
+.kb-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+}
+
+.kb-tabs__item {
+  padding: 5px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all $duration-fast $ease-out;
+
+  &.is-active {
+    background: var(--bg-card);
+    color: var(--brand-700);
+    font-weight: 600;
+    box-shadow: var(--shadow-card);
+  }
+}
+
+.kb-search {
+  width: 200px;
+}
+
+.kb-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.kb-sort {
+  width: 118px;
+}
+
+.kb-views {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-subtle);
 
   button {
-    padding: 6px 14px;
-    border: 0;
-    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 24px;
+    border: none;
+    border-radius: 6px;
     background: transparent;
-    color: var(--text-secondary);
-    font-size: 12.5px;
+    color: var(--text-tertiary);
     cursor: pointer;
 
     &.is-active {
-      background: var(--brand-50);
-      color: var(--brand-700);
-      font-weight: 600;
+      background: var(--bg-card);
+      color: var(--brand-600);
+      box-shadow: var(--shadow-card);
     }
   }
 }
 
-.scope-tabs__hint {
-  margin-left: auto;
-  font-size: 11px;
+.kb-hint {
+  margin: -4px 2px 0;
+  font-size: 11.5px;
+  line-height: 1.7;
   color: var(--text-tertiary);
-}
 
-.kb-board {
-  display: grid;
-  grid-template-columns: 270px 280px minmax(0, 1fr);
-  gap: 14px;
-  align-items: stretch;
-
-  @include respond-below(md) {
-    grid-template-columns: minmax(0, 1fr);
+  a {
+    color: var(--brand-600);
   }
 }
 
-.kb-panel {
+.kb-wall {
+  display: grid;
+  gap: 16px;
+
+  &.is-grid {
+    grid-template-columns: repeat(auto-fill, minmax(212px, 1fr));
+  }
+
+  &.is-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+.kb-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  min-height: 480px;
+  overflow: hidden;
   @include card($radius-xl);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform $duration-base $ease-out,
+    box-shadow $duration-base $ease-out,
+    border-color $duration-base $ease-out;
 
-  @include respond-below(md) {
-    min-height: 260px;
-    max-height: 60vh;
+  &:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--brand-400) 46%, var(--border-color));
+    box-shadow: var(--shadow-card-hover);
   }
 }
 
-.kb-panel__head {
+.kb-card__cover {
+  position: relative;
+  height: 128px;
+  background: linear-gradient(
+    140deg,
+    color-mix(in srgb, var(--brand-400) 24%, var(--bg-subtle)),
+    var(--bg-subtle)
+  );
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.kb-card__cover-fallback {
+  @include flex-center;
+  height: 100%;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--brand-600) 62%, var(--text-tertiary));
+}
+
+.kb-card__badge {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  &.is-shared {
+    background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+    color: var(--brand-700);
+  }
+
+  &.is-private {
+    background: color-mix(in srgb, var(--c-alert) 16%, var(--bg-card));
+    color: var(--c-alert);
+  }
+}
+
+.kb-card__body {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-
-  h2 {
-    font-size: 14px;
-    font-weight: 600;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px 8px;
 }
 
-.kb-panel__count {
+.kb-card__title {
+  @include ellipsis(1);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.kb-card__desc {
+  @include ellipsis(2);
+  min-height: 34px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.kb-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.kb-card__tag {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--brand-50);
+  font-size: 10.5px;
+  color: var(--brand-700);
+}
+
+.kb-card__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 12px;
+}
+
+.kb-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--text-tertiary);
   white-space: nowrap;
+
+  &--time {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
 }
 
-.kb-panel__body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
+.kb-card__go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--brand-50);
+  color: var(--brand-600);
+  transition: all $duration-fast $ease-out;
+
+  .kb-card:hover & {
+    background: var(--brand-500);
+    color: var(--text-inverse);
+  }
 }
 
-.book-list,
-.hit-list {
+/* 列表视图：封面缩成方形缩略图，其余内容横向排布 */
+.kb-wall.is-list .kb-card {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px 10px 10px;
+
+  .kb-card__cover {
+    flex: none;
+    width: 92px;
+    height: 68px;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .kb-card__cover-fallback {
+    font-size: 24px;
+  }
+
+  .kb-card__badge {
+    left: 6px;
+    bottom: 6px;
+    padding: 1px 7px;
+  }
+
+  .kb-card__body {
+    padding: 0;
+    gap: 4px;
+  }
+
+  .kb-card__desc {
+    min-height: 0;
+    -webkit-line-clamp: 1;
+  }
+
+  .kb-card__foot {
+    flex: none;
+    padding: 0;
+  }
+
+  .kb-card__meta--time {
+    margin-left: 0;
+  }
+}
+
+.kb-skeleton {
+  padding: 0 0 14px;
+  overflow: hidden;
+  @include card($radius-xl);
+}
+
+.kb-skeleton__cover {
+  width: 100%;
+  height: 128px;
+}
+
+.kb-skeleton__body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 10px;
-  list-style: none;
-}
-
-.book-item {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: var(--bg-subtle, rgba(0, 0, 0, 0.02));
-  cursor: pointer;
-
-  &.is-active {
-    border-color: var(--brand-400);
-    background: var(--brand-50);
-  }
-}
-
-.book-item__title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.book-item__desc {
-  margin-top: 6px;
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.book-item__meta {
-  display: flex;
-  gap: 10px;
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--text-tertiary);
-}
-
-.hit-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-
-  &:hover {
-    background: var(--brand-50);
-  }
-
-  span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.kb-tip {
-  margin-top: 12px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
+  padding: 12px 14px 0;
 }
 
 .kb-empty {
@@ -706,56 +686,54 @@ function openCreateDoc(): void {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 28px 12px;
+  min-height: 320px;
+  padding: 32px 16px;
   text-align: center;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-tertiary);
+  @include card($radius-xl);
 }
 
 .kb-empty__icon {
-  font-size: 28px;
-  opacity: 0.5;
+  font-size: 30px;
+  color: var(--brand-400);
+  opacity: 0.6;
 }
 
-.doc-title {
-  min-width: 0;
-
-  p {
-    margin-top: 3px;
-    font-size: 11px;
-    color: var(--text-tertiary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
+.kb-empty__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
 }
 
-.kb-preview-wrap {
-  padding-right: 4px;
-}
-
-.kb-preview {
-  font-size: 13.5px;
-  line-height: 1.8;
-  word-break: break-word;
-
-  :deep(img) {
-    max-width: 100%;
+@include respond-below(sm) {
+  .kb-search,
+  .kb-sort {
+    width: 100%;
   }
 
-  :deep(pre) {
-    overflow: auto;
+  .kb-toolbar__right {
+    width: 100%;
+    margin-left: 0;
+    flex-wrap: wrap;
   }
-}
 
-.dialog-hint {
-  margin-bottom: 12px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
+  .kb-wall.is-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px;
+  }
 
-.dialog-input {
-  margin-bottom: 10px;
+  .kb-card__cover {
+    height: 96px;
+  }
+
+  /* 窄卡片一排放不下"文档数 + 更新时间 + 箭头"，更新时间让位 */
+  .kb-wall.is-grid .kb-card__meta--time {
+    display: none;
+  }
+
+  .kb-wall.is-grid .kb-card__go {
+    margin-left: auto;
+  }
 }
 </style>
