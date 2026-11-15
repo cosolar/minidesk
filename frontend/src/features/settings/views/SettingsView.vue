@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useMutation, useQuery } from '@tanstack/vue-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { useAppStore } from '@/core/stores/app'
@@ -10,6 +10,15 @@ import { settingsApi, type Integration, type TestResult } from '../api'
 import { kbApi } from '@/features/study/kb/api'
 
 const appStore = useAppStore()
+const queryClient = useQueryClient()
+
+/** 中国天气网按城市名检索，这里给常用城市做下拉，仍允许手动输入其他城市 */
+const CITY_OPTIONS = [
+  '北京', '上海', '天津', '重庆', '广州', '深圳', '杭州', '南京', '苏州', '成都',
+  '武汉', '西安', '长沙', '郑州', '青岛', '济南', '沈阳', '大连', '哈尔滨', '长春',
+  '石家庄', '太原', '呼和浩特', '合肥', '福州', '厦门', '南昌', '南宁', '海口',
+  '贵阳', '昆明', '拉萨', '兰州', '西宁', '银川', '乌鲁木齐', '香港', '澳门', '台北',
+]
 
 const form = reactive<{ city: string; theme: ThemeId }>({
   city: '北京',
@@ -35,6 +44,8 @@ const kb = ref<IntegrationForm>({
 const testing = ref(false)
 const kbTesting = ref(false)
 const weatherStatus = ref<TestResult | null>(null)
+/** 最近一次检测时间：重复点「测试连接」时也有可见反馈 */
+const weatherCheckedAt = ref('')
 const settingsQuery = useQuery({
   queryKey: ['settings'],
   queryFn: () => settingsApi.get(),
@@ -81,10 +92,14 @@ function applyIntegration(source: Integration | undefined, target: IntegrationFo
 }
 
 const saveSettings = useMutation({
-  mutationFn: () => settingsApi.update({ city: form.city, theme: form.theme }),
-  onSuccess: () => {
+  mutationFn: () => settingsApi.update({ city: form.city.trim(), theme: form.theme }),
+  onSuccess: async (saved) => {
     appStore.setTheme(form.theme)
-    ElMessage.success('设置已保存')
+    form.city = saved.city
+    // 首页天气按新城市重新取，否则会一直用旧城市（最多 30 分钟缓存）
+    await queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    await checkWeather()
+    ElMessage.success(`已保存，天气城市切换为「${saved.city}」`)
   },
 })
 
@@ -100,20 +115,32 @@ async function saveIntegration(): Promise<void> {
   ElMessage.success('已保存')
 }
 
-/** 页面加载时静默探测一次，不弹提示；命中 30 分钟缓存，不会产生额外外部请求 */
-async function checkWeather(): Promise<TestResult> {
-  const result = await settingsApi.testWeather(form.city)
-  weatherStatus.value = result
-  return result
+/** 探测一次天气；失败时也要落到界面状态，不能只有控制台报错 */
+async function checkWeather(): Promise<TestResult | null> {
+  const city = form.city.trim()
+  try {
+    const result = await settingsApi.testWeather(city)
+    weatherStatus.value = result
+    weatherCheckedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    return result
+  } catch {
+    weatherStatus.value = { ok: false, message: '检测失败，请稍后重试', city, source: '' }
+    weatherCheckedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    return null
+  }
 }
 
 async function testWeather(): Promise<void> {
+  if (!form.city.trim()) {
+    ElMessage.warning('请先选择所在城市')
+    return
+  }
   testing.value = true
   try {
     const result = await checkWeather()
-    if (result.ok) {
-      ElMessage.success(`${result.message}：${result.text} ${result.temp}℃`)
-    } else {
+    if (result?.ok) {
+      ElMessage.success(`${result.city ?? form.city}：${result.text} ${result.temp}℃`)
+    } else if (result) {
       ElMessage.warning(result.message)
     }
   } finally {
@@ -154,8 +181,18 @@ const kbHint = computed(() =>
 
       <div class="field">
         <label>所在城市</label>
-        <el-input v-model="form.city" placeholder="用于天气展示" style="max-width: 240px" />
+        <el-select
+          v-model="form.city"
+          filterable
+          allow-create
+          default-first-option
+          placeholder="选择或输入城市"
+          style="max-width: 240px"
+        >
+          <el-option v-for="city in CITY_OPTIONS" :key="city" :label="city" :value="city" />
+        </el-select>
       </div>
+      <p class="card__footnote">改完城市后要点下方「保存偏好」，首页天气才会切换</p>
 
       <div class="field field--stack">
         <label>界面主题</label>
@@ -204,6 +241,7 @@ const kbHint = computed(() =>
       >
         <span class="weather-result__state" :class="{ 'is-live': weatherStatus.ok }" aria-hidden="true" />
         <span>{{ weatherStatus.message }}</span>
+        <span v-if="weatherStatus.city" class="weather-result__city">{{ weatherStatus.city }}</span>
         <b v-if="weatherStatus.temp !== undefined">{{ weatherStatus.text }} {{ weatherStatus.temp }}℃</b>
       </div>
 
@@ -212,7 +250,8 @@ const kbHint = computed(() =>
           <el-icon><Refresh /></el-icon>
           {{ testing ? '正在检测…' : '测试连接' }}
         </button>
-        <span class="card__footnote">结果缓存 30 分钟，不影响首页加载速度</span>
+        <span v-if="weatherCheckedAt" class="card__footnote">最近检测 {{ weatherCheckedAt }}</span>
+        <span v-else class="card__footnote">结果缓存 30 分钟，不影响首页加载速度</span>
       </div>
     </section>
 
@@ -436,6 +475,15 @@ const kbHint = computed(() =>
     &.is-live {
       background: var(--brand-500);
     }
+  }
+
+  &__city {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--brand-500) 14%, transparent);
+    color: var(--brand-600);
+    font-size: 10.5px;
+    font-weight: 600;
   }
 }
 

@@ -18,6 +18,8 @@ export interface Integration {
 export interface TestResult {
   ok: boolean
   message: string
+  /** 实际查询的城市，用来确认设置是否生效 */
+  city?: string
   temp?: number
   text?: string
   /** 实际生效的数据源：cma / open-meteo / mock */

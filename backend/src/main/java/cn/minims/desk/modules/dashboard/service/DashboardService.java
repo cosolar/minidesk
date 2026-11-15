@@ -10,6 +10,8 @@ import cn.minims.desk.modules.life.entity.LifeLogDO;
 import cn.minims.desk.modules.life.mapper.LifeLogMapper;
 import cn.minims.desk.modules.study.service.StudyService;
 import cn.minims.desk.modules.study.vo.StudyWeekVO;
+import cn.minims.desk.modules.user.entity.SysUserSettingDO;
+import cn.minims.desk.modules.user.mapper.SysUserSettingMapper;
 import cn.minims.desk.modules.work.task.service.TaskService;
 import cn.minims.desk.modules.work.task.vo.TaskVO;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -36,25 +38,28 @@ public class DashboardService {
     private final LifeLogMapper lifeLogMapper;
     private final CalendarService calendarService;
     private final DashboardQueryMapper queryMapper;
+    private final SysUserSettingMapper settingMapper;
 
     public DashboardService(WeatherService weatherService,
                             TaskService taskService,
                             StudyService studyService,
                             LifeLogMapper lifeLogMapper,
                             CalendarService calendarService,
-                            DashboardQueryMapper queryMapper) {
+                            DashboardQueryMapper queryMapper,
+                            SysUserSettingMapper settingMapper) {
         this.weatherService = weatherService;
         this.taskService = taskService;
         this.studyService = studyService;
         this.lifeLogMapper = lifeLogMapper;
         this.calendarService = calendarService;
         this.queryMapper = queryMapper;
+        this.settingMapper = settingMapper;
     }
 
     public DashboardVO summary() {
         AtomicBoolean partial = new AtomicBoolean(false);
 
-        WeatherVO weather = safe(() -> weatherService.now(null), null, partial, "weather");
+        WeatherVO weather = safe(() -> weatherService.now(userCity()), null, partial, "weather");
         List<TaskVO> todos = safe(() -> taskService.today(), List.of(), partial, "todo");
         StudyWeekVO study = safe(studyService::weekStats, null, partial, "study");
         List<LifeLogDO> logs = safe(this::latestLifeLogs, List.of(), partial, "lifeLogs");
@@ -75,6 +80,16 @@ public class DashboardService {
                 new DashboardVO.CalendarBlock(LocalDate.now().toString(), events.stream().limit(3).toList()),
                 new DashboardVO.Counters(unread, doingProjects, streak),
                 partial.get());
+    }
+
+    /** 天气必须跟随「个人偏好 → 所在城市」，取不到设置时交给 WeatherService 兜底北京。 */
+    private String userCity() {
+        SysUserSettingDO setting = settingMapper.selectOne(
+                Wrappers.lambdaQuery(SysUserSettingDO.class).last("limit 1"));
+        if (setting == null || setting.getCity() == null || setting.getCity().isBlank()) {
+            return null;
+        }
+        return setting.getCity().trim();
     }
 
     private List<LifeLogDO> latestLifeLogs() {

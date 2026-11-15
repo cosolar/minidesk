@@ -19,7 +19,7 @@ public record SettingsVO(
     ) {
     }
 
-    /** 天气连通性测试：source 为实际生效的数据源（cma / open-meteo / mock）。 */
-    public record TestResult(boolean ok, String message, Integer temp, String text, String source) {
+    /** 天气连通性测试：source 为实际生效的数据源（cma / open-meteo / mock），city 为实际查询的城市。 */
+    public record TestResult(boolean ok, String message, String city, Integer temp, String text, String source) {
     }
 }

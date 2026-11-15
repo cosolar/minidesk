@@ -105,10 +105,13 @@ public class SettingsService {
     }
 
     public SettingsVO.TestResult testWeather(String city) {
-        WeatherVO weather = weatherService.refresh(city);
+        // 未传城市时用个人偏好里的城市，避免「设置里是天津、测试却总查北京」
+        String target = StringUtils.hasText(city) ? city.trim() : requireSetting().getCity();
+        WeatherVO weather = weatherService.refresh(target);
         if (weather.isMock()) {
             return new SettingsVO.TestResult(
-                    false, "免费天气源暂时不可用，当前展示模拟数据", weather.temp(), weather.text(), weather.source());
+                    false, "免费天气源暂时不可用，当前展示模拟数据",
+                    weather.city(), weather.temp(), weather.text(), weather.source());
         }
         String label = switch (weather.source()) {
             case "cma" -> "中国天气网";
@@ -116,7 +119,8 @@ public class SettingsService {
             default -> weather.source();
         };
         String message = "连接成功 · " + label + (weather.stale() ? "（缓存结果）" : "");
-        return new SettingsVO.TestResult(true, message, weather.temp(), weather.text(), weather.source());
+        return new SettingsVO.TestResult(
+                true, message, weather.city(), weather.temp(), weather.text(), weather.source());
     }
 
     private SysUserSettingDO requireSetting() {
