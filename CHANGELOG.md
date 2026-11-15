@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The deployment workflow no longer aborts the rollout when the server cannot
-  update its git checkout: the sync is retried, prints git diagnostics on
-  failure and only warns, so the container still rolls to the new image.
+- The publish workflow only builds and pushes the image again; it no longer
+  connects to the server or rolls the container, so releases never touch
+  production from CI.
 
 ## [0.4.0] - 2026-11-15
 
