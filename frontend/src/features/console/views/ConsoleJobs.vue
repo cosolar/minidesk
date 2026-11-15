@@ -273,15 +273,15 @@ function statusLabel(value: string | null): string {
   gap: 16px;
 
   h1 {
+    color: var(--text-primary);
     font-size: 20px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 4px;
+    color: var(--text-tertiary);
     font-size: 12px;
-    color: #6b7c87;
   }
 }
 
@@ -290,17 +290,21 @@ function statusLabel(value: string | null): string {
   align-items: center;
   gap: 14px;
   padding: 14px 18px;
-  border: 1px solid #e8ecf2;
-  border-radius: 10px;
-  background: linear-gradient(100deg, #f2fbf7, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--brand-50) 70%, transparent),
+    var(--bg-card)
+  );
 }
 
 .summary__icon {
   @include flex-center;
   width: 38px;
   height: 38px;
-  border-radius: 10px;
-  background: var(--brand-100);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--brand-100) 78%, transparent);
   color: var(--brand-600);
   font-size: 19px;
 }
@@ -311,13 +315,13 @@ function statusLabel(value: string | null): string {
   gap: 3px;
 
   strong {
+    color: var(--text-primary);
     font-size: 13.5px;
-    color: #1b2a32;
   }
 
   span {
+    color: var(--text-secondary);
     font-size: 11.5px;
-    color: #7b8d97;
   }
 }
 
@@ -325,16 +329,15 @@ function statusLabel(value: string | null): string {
   margin-left: auto;
   padding: 3px 10px;
   border-radius: 999px;
-  background: #eef4ff;
-  color: #4c6fff;
+  background: color-mix(in srgb, var(--brand-100) 76%, transparent);
+  color: var(--brand-700);
   font-size: 11px;
 }
 
 .table {
+  @include card($radius-lg);
   width: 100%;
-  background: #fff;
-  border: 1px solid #e8ecf2;
-  border-radius: 8px;
+  overflow: hidden;
 }
 
 .job-name {
@@ -344,14 +347,14 @@ function statusLabel(value: string | null): string {
   padding: 4px 0;
 
   strong {
+    color: var(--text-primary);
     font-size: 12.5px;
-    color: #1b2a32;
   }
 
   span {
+    color: var(--text-tertiary);
     font-size: 11px;
     line-height: 1.5;
-    color: #9aa8b2;
   }
 }
 
@@ -361,24 +364,24 @@ function statusLabel(value: string | null): string {
   gap: 6px;
 
   code {
-    font-size: 11px;
-    color: #4c6fff;
-    background: #f2f5ff;
     padding: 3px 7px;
-    border-radius: 5px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--brand-100) 62%, transparent);
+    color: var(--brand-700);
+    font-size: 11px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 }
 
 .mono {
+  color: var(--text-secondary);
   font-size: 11.5px;
-  color: #6b7c87;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .muted {
+  color: var(--text-tertiary);
   font-size: 11px;
-  color: #a6b2ba;
 }
 
 .last-run {
@@ -392,7 +395,7 @@ function statusLabel(value: string | null): string {
   display: inline-block;
   max-width: 260px;
   @include ellipsis;
-  color: #e05b5b;
+  color: var(--el-color-danger);
   font-size: 11px;
 }
 
@@ -409,15 +412,15 @@ function statusLabel(value: string | null): string {
   gap: 16px;
 
   h2 {
+    color: var(--text-primary);
     font-size: 15px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 3px;
+    color: var(--text-tertiary);
     font-size: 11.5px;
-    color: #9aa8b2;
   }
 }
 
@@ -438,8 +441,8 @@ function statusLabel(value: string | null): string {
 }
 
 .cron-form__label {
+  color: var(--text-secondary);
   font-size: 12px;
-  color: #4a5b66;
 }
 
 .cron-form__presets {
@@ -448,8 +451,8 @@ function statusLabel(value: string | null): string {
   gap: 8px;
 
   > span {
+    color: var(--text-tertiary);
     font-size: 11.5px;
-    color: #9aa8b2;
   }
 
   > div {
@@ -461,8 +464,8 @@ function statusLabel(value: string | null): string {
 
 .cron-form__tip {
   margin: 0;
+  color: var(--text-tertiary);
   font-size: 11px;
   line-height: 1.6;
-  color: #9aa8b2;
 }
 </style>

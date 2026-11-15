@@ -69,45 +69,56 @@ async function backToDesk(): Promise<void> {
 </template>
 
 <style scoped lang="scss">
+// 后台沿用用户端的设计 token：五套主题与深色自动生效，不再写死深蓝 + 蓝主色
 .console {
-  --console-bg: #f5f7fa;
-  --console-side: #1b2230;
-  --console-side-hover: #242d3d;
-  --console-primary: #4c6fff;
-
   display: flex;
+  gap: 12px;
   height: 100vh;
   height: 100dvh;
+  padding: 12px;
   overflow: hidden;
-  background: var(--console-bg);
+  background:
+    radial-gradient(
+      72% 52% at 0% 0%,
+      color-mix(in srgb, var(--brand-200) 32%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      58% 46% at 100% 0%,
+      color-mix(in srgb, var(--brand-100) 28%, transparent),
+      transparent 58%
+    ),
+    var(--bg-page);
+  color: var(--text-primary);
 }
 
 .console__sidebar {
   display: flex;
   flex-direction: column;
-  width: 208px;
-  flex: 0 0 208px;
-  padding: 18px 12px;
-  background: var(--console-side);
-  color: #e6eaf2;
+  width: 212px;
+  flex: 0 0 212px;
+  padding: 16px 12px;
+  @include card($radius-xl);
+  overflow: hidden;
 }
 
 .console__brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 8px 20px;
+  padding: 0 6px 18px;
 
   strong {
     display: block;
+    color: var(--text-primary);
     font-size: 14px;
   }
 
   small {
     display: block;
     margin-top: 1px;
+    color: var(--text-tertiary);
     font-size: 10px;
-    color: #7d8aa3;
   }
 }
 
@@ -115,10 +126,11 @@ async function backToDesk(): Promise<void> {
   @include flex-center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
-  background: var(--console-primary);
-  color: #fff;
+  border-radius: 10px;
+  background: linear-gradient(145deg, var(--brand-400), var(--brand-600));
+  color: var(--text-inverse);
   font-weight: 700;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-500) 28%, transparent);
 }
 
 .console__nav {
@@ -133,82 +145,92 @@ async function backToDesk(): Promise<void> {
   gap: 9px;
   height: 38px;
   padding: 0 10px;
-  border-radius: 8px;
-  color: #a9b4c8;
+  border-radius: 10px;
+  color: var(--text-secondary);
   font-size: 13px;
-  transition: all 0.16s ease;
+  transition:
+    background-color $duration-fast $ease-out,
+    color $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
 
   &:hover {
-    background: var(--console-side-hover);
-    color: #fff;
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 
   &.is-active {
-    background: var(--console-primary);
-    color: #fff;
+    background: linear-gradient(135deg, var(--brand-400), var(--brand-600));
+    color: var(--text-inverse);
     font-weight: 500;
+    box-shadow: 0 8px 18px color-mix(in srgb, var(--brand-500) 30%, transparent);
   }
 }
 
 .console__foot {
   margin-top: auto;
   padding-top: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border-color);
 }
 
 .console__back {
   width: 100%;
   height: 34px;
+  padding: 0 10px;
   border: none;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
-  color: #7d8aa3;
+  color: var(--text-tertiary);
   font-size: 12px;
   text-align: left;
-  padding: 0 10px;
   cursor: pointer;
+  transition:
+    background-color $duration-fast $ease-out,
+    color $duration-fast $ease-out;
 
   &:hover {
-    background: var(--console-side-hover);
-    color: #fff;
+    background: var(--bg-hover);
+    color: var(--brand-600);
   }
 }
 
 .console__main {
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
 }
 
 .console__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  padding: 0 20px;
-  background: #fff;
-  border-bottom: 1px solid #e8ecf2;
+  height: 52px;
+  flex: 0 0 auto;
+  padding: 0 8px 0 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
 }
 
 .console__crumb {
+  color: var(--text-secondary);
   font-size: 13px;
-  color: #6b7c87;
+  font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
 .console__user {
   display: flex;
   align-items: center;
   gap: 8px;
+  color: var(--text-secondary);
   font-size: 12.5px;
 }
 
 .console__badge {
   padding: 1px 7px;
   border-radius: 999px;
-  background: #eef2ff;
-  color: var(--console-primary);
+  background: color-mix(in srgb, var(--brand-100) 76%, transparent);
+  color: var(--brand-700);
   font-size: 10px;
   font-weight: 600;
 }
@@ -221,7 +243,7 @@ async function backToDesk(): Promise<void> {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 12px 0;
+  padding: 16px 2px 16px 0;
 
   > :deep(*) {
     flex: 1 0 auto;
@@ -232,6 +254,8 @@ async function backToDesk(): Promise<void> {
 @media (max-width: 767px) {
   .console {
     flex-direction: column;
+    gap: 8px;
+    padding: 8px;
   }
 
   .console__sidebar {
@@ -248,6 +272,12 @@ async function backToDesk(): Promise<void> {
     flex-direction: row;
     gap: 4px;
     overflow-x: auto;
+    /* 窄屏横向滚动条会压住导航文字，视觉上只保留滚动能力 */
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
   .console__nav-item {
@@ -257,16 +287,27 @@ async function backToDesk(): Promise<void> {
   }
 
   .console__foot {
-    display: none;
+    /* 窄屏也要留回工作台的出口：只在尾部收窄，不要整块隐藏 */
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+    padding-top: 6px;
+  }
+
+  .console__back {
+    width: auto;
+    height: 28px;
+    padding: 0 6px;
+    font-size: 11.5px;
   }
 
   .console__header {
-    height: 48px;
-    padding: 0 14px;
+    height: 44px;
+    padding: 0 4px;
   }
 
   .console__content {
-    padding: 12px 10px 0;
+    padding: 10px 0 12px;
   }
 }
 </style>

@@ -220,15 +220,15 @@ function roleText(roles: string[]): string {
   justify-content: space-between;
 
   h1 {
+    color: var(--text-primary);
     font-size: 20px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 4px;
+    color: var(--text-tertiary);
     font-size: 12px;
-    color: #6b7c87;
   }
 }
 
@@ -238,9 +238,8 @@ function roleText(roles: string[]): string {
 }
 
 .table {
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e8ecf2;
+  @include card($radius-lg);
+  overflow: hidden;
 }
 
 .pager {

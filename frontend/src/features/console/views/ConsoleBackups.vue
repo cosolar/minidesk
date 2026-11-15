@@ -220,15 +220,15 @@ async function onFileChange(event: Event): Promise<void> {
   gap: 16px;
 
   h1 {
+    color: var(--text-primary);
     font-size: 20px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 4px;
+    color: var(--text-tertiary);
     font-size: 12px;
-    color: #6b7c87;
   }
 }
 
@@ -241,32 +241,36 @@ async function onFileChange(event: Event): Promise<void> {
   display: flex;
   gap: 14px;
   padding: 14px 18px;
-  border: 1px solid #e8ecf2;
-  border-radius: 10px;
-  background: linear-gradient(100deg, #f2fbf7, #fff);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  background: linear-gradient(
+    100deg,
+    color-mix(in srgb, var(--brand-50) 70%, transparent),
+    var(--bg-card)
+  );
 
   ul {
-    margin: 0;
-    padding-left: 16px;
     display: flex;
     flex-direction: column;
     gap: 5px;
+    margin: 0;
+    padding-left: 16px;
+    color: var(--text-secondary);
     font-size: 11.5px;
     line-height: 1.7;
-    color: #6b7c87;
   }
 
   code {
     padding: 1px 5px;
-    border-radius: 4px;
-    background: #eef5f2;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--brand-100) 70%, transparent);
     color: var(--brand-700);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   strong {
-    color: #1b2a32;
+    color: var(--text-primary);
   }
 }
 
@@ -282,14 +286,12 @@ async function onFileChange(event: Event): Promise<void> {
 }
 
 .restore-card {
+  @include card($radius-lg);
   padding: 14px 18px;
-  border: 1px solid #e8ecf2;
-  border-radius: 10px;
-  background: #fff;
 
   &.is-pending {
-    border-color: #f5d6a8;
-    background: #fffbf4;
+    border-color: color-mix(in srgb, var(--el-color-warning) 42%, var(--border-color));
+    background: color-mix(in srgb, var(--el-color-warning-light-9) 82%, var(--bg-card));
   }
 }
 
@@ -300,19 +302,19 @@ async function onFileChange(event: Event): Promise<void> {
   gap: 16px;
 
   h2 {
+    color: var(--text-primary);
     font-size: 14px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 4px;
+    color: var(--text-secondary);
     font-size: 11.5px;
-    color: #7b8d97;
   }
 
   .last-result {
-    color: #9aa8b2;
+    color: var(--text-tertiary);
     font-size: 11px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
@@ -330,28 +332,27 @@ async function onFileChange(event: Event): Promise<void> {
 
 .list__head {
   h2 {
+    color: var(--text-primary);
     font-size: 15px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 3px;
+    color: var(--text-tertiary);
     font-size: 11.5px;
-    color: #9aa8b2;
   }
 }
 
 .table {
+  @include card($radius-lg);
   width: 100%;
-  background: #fff;
-  border: 1px solid #e8ecf2;
-  border-radius: 8px;
+  overflow: hidden;
 }
 
 .file-name {
+  color: var(--text-primary);
   font-size: 12px;
-  color: #1b2a32;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 </style>

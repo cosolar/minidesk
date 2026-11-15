@@ -128,8 +128,8 @@ async function sendTest(): Promise<void> {
   gap: 10px;
   margin-bottom: 18px;
   padding: 10px 14px;
-  border-radius: 10px;
-  background: #f7fbf9;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--brand-50) 72%, var(--bg-card));
   font-size: 12px;
   color: var(--text-secondary);
 }
@@ -157,9 +157,9 @@ async function sendTest(): Promise<void> {
   border-top: 1px dashed var(--border-color);
 
   h4 {
+    color: var(--text-primary);
     font-size: 13px;
     font-weight: 600;
-    color: #22383c;
   }
 
   p {

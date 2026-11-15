@@ -55,7 +55,7 @@ const health = computed(() => [
       <section class="notice">
         <h2>权限边界</h2>
         <p>
-          管理员可管理账号、查看数据量、执行备份与恢复，但**无法读取**任何用户的笔记、日记、记账明细。
+          管理员可管理账号、查看数据量、执行备份与恢复，但<strong>无法读取</strong>任何用户的笔记、日记、记账明细。
           这是产品约束，不是权限没做。
         </p>
       </section>
@@ -67,20 +67,21 @@ const health = computed(() => [
 .console-dash {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
+  padding-bottom: 8px;
 }
 
 .dash-head {
   h1 {
+    color: var(--text-primary);
     font-size: 20px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 4px;
+    color: var(--text-tertiary);
     font-size: 12px;
-    color: #6b7c87;
   }
 }
 
@@ -99,45 +100,49 @@ const health = computed(() => [
 }
 
 .stat {
+  @include card($radius-lg);
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 14px 16px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e8ecf2;
+  transition:
+    transform $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-float);
+  }
 }
 
 .stat__label {
+  color: var(--text-tertiary);
   font-size: 11.5px;
-  color: #6b7c87;
 }
 
 .stat__value {
+  color: var(--text-primary);
   font-size: 24px;
   font-weight: 700;
-  color: #1b2a32;
 
   em {
     margin-left: 3px;
+    color: var(--text-tertiary);
     font-size: 11px;
     font-style: normal;
     font-weight: 500;
-    color: #9aa8b2;
   }
 }
 
 .health,
 .notice {
+  @include card($radius-lg);
   padding: 16px 18px;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e8ecf2;
 
   h2 {
+    color: var(--text-primary);
     font-size: 14px;
     font-weight: 600;
-    color: #1b2a32;
   }
 }
 
@@ -146,26 +151,36 @@ const health = computed(() => [
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   margin-top: 12px;
+
+  /* 窄屏三列会把「数据库大小 / 0.6 MB」挤成两行，改成单列排布 */
+  @include respond-below(sm) {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .health__item {
   display: flex;
   justify-content: space-between;
   padding: 10px 12px;
-  border-radius: 6px;
-  background: #f7f9fc;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
   font-size: 12.5px;
-  color: #6b7c87;
 
   strong {
-    color: #1b2a32;
+    color: var(--text-primary);
   }
 }
 
 .notice p {
   margin-top: 10px;
+  color: var(--text-secondary);
   font-size: 12.5px;
   line-height: 1.8;
-  color: #6b7c87;
+
+  strong {
+    color: var(--brand-600);
+    font-weight: 600;
+  }
 }
 </style>

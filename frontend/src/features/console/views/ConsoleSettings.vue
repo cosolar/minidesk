@@ -74,6 +74,25 @@ function isSwitch(key: string): boolean {
   return key === 'allow_register' || key === 'install_claimed'
 }
 
+/** 配置项中文名：直接展示 config_key 太像后台日志，认不出在改什么 */
+const CONFIG_LABELS: Record<string, string> = {
+  site_name: '站点名称',
+  allow_register: '开放自助注册',
+  install_claimed: '管理员领取状态',
+  password_min_length: '密码最小长度',
+  login_fail_limit: '登录失败锁定阈值',
+  login_lock_minutes: '锁定时长（分钟）',
+  audit_keep_days: '审计日志保留天数',
+  note_recycle_days: '笔记回收站保留天数',
+  backup_keep: '备份保留份数',
+  site_logo_wide: '横版 Logo 文件名',
+  'bookmark.migration.v1': '旧书签迁移标记',
+}
+
+function configLabel(key: string): string {
+  return CONFIG_LABELS[key] ?? key
+}
+
 function openDetail(value: unknown): void {
   detailRow.value = value as OperLog
   detailVisible.value = true
@@ -102,8 +121,8 @@ function resetOperPage(): void {
           <div class="config-list">
             <div v-for="item in items" :key="item.key" class="config-row">
               <div class="config-row__label">
-                <strong>{{ item.key }}</strong>
-                <span>{{ item.remark }}</span>
+                <strong>{{ configLabel(item.key) }}</strong>
+                <span>{{ item.key }} · {{ item.remark }}</span>
               </div>
               <el-switch
                 v-if="isSwitch(item.key)"
@@ -219,24 +238,23 @@ function resetOperPage(): void {
   justify-content: space-between;
 
   h1 {
+    color: var(--text-primary);
     font-size: 20px;
     font-weight: 700;
-    color: #1b2a32;
   }
 
   p {
     margin-top: 4px;
+    color: var(--text-tertiary);
     font-size: 12px;
-    color: #6b7c87;
   }
 }
 
 .config-list {
+  @include card($radius-lg);
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e8ecf2;
+  overflow: hidden;
 }
 
 .config-row {
@@ -244,7 +262,7 @@ function resetOperPage(): void {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #f0f3f7;
+  border-bottom: 1px solid var(--border-color);
 
   &:last-child {
     border-bottom: none;
@@ -256,28 +274,27 @@ function resetOperPage(): void {
   flex-direction: column;
 
   strong {
+    color: var(--text-primary);
     font-size: 12.5px;
-    color: #1b2a32;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 
   span {
     margin-top: 2px;
+    color: var(--text-tertiary);
     font-size: 11px;
-    color: #9aa8b2;
   }
 }
 
 .table {
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid #e8ecf2;
+  @include card($radius-lg);
+  overflow: hidden;
 }
 
 .hint {
   margin-top: 10px;
+  color: var(--text-tertiary);
   font-size: 11px;
-  color: #9aa8b2;
 }
 
 .audit-tools {
@@ -304,12 +321,12 @@ function resetOperPage(): void {
   align-items: baseline;
   gap: 14px;
   padding: 8px 0;
-  border-bottom: 1px solid #f0f3f7;
+  border-bottom: 1px solid var(--border-color);
 
   > span {
     flex: 0 0 110px;
+    color: var(--text-tertiary);
     font-size: 11.5px;
-    color: #9aa8b2;
   }
 
   code,
@@ -317,8 +334,8 @@ function resetOperPage(): void {
     flex: 1;
     min-width: 0;
     margin: 0;
+    color: var(--text-primary);
     font-size: 11.5px;
-    color: #1b2a32;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     white-space: pre-wrap;
     word-break: break-all;

@@ -120,9 +120,9 @@ async function remove(kind: 'logo' | 'logo-wide'): Promise<void> {
   border-bottom: 1px dashed var(--border-color);
 
   h3 {
+    color: var(--text-primary);
     font-size: 13.5px;
     font-weight: 700;
-    color: #22383c;
   }
 
   p {
@@ -144,9 +144,9 @@ async function remove(kind: 'logo' | 'logo-wide'): Promise<void> {
   align-items: center;
   justify-content: center;
   margin-top: 12px;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px dashed var(--border-strong);
-  background: #fbfefd;
+  background: var(--bg-subtle);
 
   img {
     max-width: 100%;
