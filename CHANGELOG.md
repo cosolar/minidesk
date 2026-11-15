@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-15
+
+### Added
+
+- Note recycle bin: deleting a note moves it to the recycle bin instead of
+  dropping it. A drawer on the notes page lists the recycled notes with the days
+  left and supports restore, permanent delete and emptying the bin. The
+  retention window is a system setting (`note_recycle_days`, 30 days by
+  default), and a built-in `noteRecyclePurge` job removes expired notes daily.
+
+### Changed
+
+- The admin console now uses the same design tokens as the user-facing app, so
+  all five themes and dark mode apply, with glass surfaces and brand gradients.
+
 ## [0.2.0] - 2026-11-15
 
 ### Added
@@ -173,6 +188,7 @@ tasks, calendar, notes and search, plus isolated multi-account data.
   clustered scheduling and misfire recovery are not supported.
 - Iconify icons may require an offline icon set when the device has no network.
 
-[Unreleased]: https://github.com/cosolar/minidesk/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/cosolar/minidesk/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/cosolar/minidesk/releases/tag/v0.3.0
 [0.1.1]: https://github.com/cosolar/minidesk/releases/tag/v0.1.1
 [0.1.0]: https://github.com/cosolar/minidesk/releases/tag/v0.1.0
