@@ -826,6 +826,7 @@ CREATE TABLE IF NOT EXISTS note (
   content    TEXT,                                      -- Markdown
   tags       VARCHAR(255),
   folder     VARCHAR(64),
+  folder_id  BIGINT,                                    -- 所属目录，null 表示直接挂在板块根目录
   pinned     TINYINT      NOT NULL DEFAULT 0,
   archived   TINYINT      NOT NULL DEFAULT 0,
   word_count INTEGER      NOT NULL DEFAULT 0,
@@ -837,6 +838,23 @@ CREATE TABLE IF NOT EXISTS note (
 
 CREATE INDEX IF NOT EXISTS idx_note_user ON note(user_id, module, type, updated_at);
 -- idx_note_recycle 由 SchemaUpgrade 在补完 deleted_at 后创建：老库此时还没有该列
+-- idx_note_folder 由 SchemaUpgrade 在补完 folder_id 后创建，原因同上
+
+-- 笔记目录：工作 / 学习 / 生活是固定根（不入库），这里的行都是用户自建目录，
+-- parent_id 为空表示挂在板块根目录下，支持多级嵌套
+CREATE TABLE IF NOT EXISTS note_folder (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    BIGINT       NOT NULL,
+  module     VARCHAR(16)  NOT NULL DEFAULT 'work',   -- work/study/life
+  parent_id  BIGINT,                                 -- null = 板块根目录下第一级
+  name       VARCHAR(100) NOT NULL,
+  sort_no    INTEGER      NOT NULL DEFAULT 0,
+  created_at DATETIME     NOT NULL,
+  updated_at DATETIME     NOT NULL,
+  deleted    TINYINT      NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_folder_user ON note_folder(user_id, module, parent_id);
 
 -- 笔记分享：公开短链 /share/note/{token}，密码可选、有效期可空（空=永久）
 CREATE TABLE IF NOT EXISTS note_share (

@@ -820,6 +820,7 @@ CREATE TABLE IF NOT EXISTS `note` (
   `content` TEXT,  -- Markdown
   `tags` VARCHAR(255),
   `folder` VARCHAR(64),
+  `folder_id` BIGINT,  -- 所属目录，null 表示直接挂在板块根目录
   `pinned` TINYINT NOT NULL DEFAULT 0,
   `archived` TINYINT NOT NULL DEFAULT 0,
   `word_count` INT NOT NULL DEFAULT 0,
@@ -829,6 +830,20 @@ CREATE TABLE IF NOT EXISTS `note` (
   `deleted_at` DATETIME,  -- 移入回收站的时间，null 表示未删除
   PRIMARY KEY (`id`),
   KEY `idx_note_user` (`user_id`, `module`, `type`, `updated_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `note_folder` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `module` VARCHAR(16) NOT NULL DEFAULT 'work',  -- work/study/life
+  `parent_id` BIGINT,  -- null = 板块根目录下第一级
+  `name` VARCHAR(100) NOT NULL,
+  `sort_no` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  `deleted` TINYINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_note_folder_user` (`user_id`, `module`, `parent_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `note_share` (

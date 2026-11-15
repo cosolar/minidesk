@@ -36,6 +36,25 @@ public interface NoteMapper extends BaseMapper<NoteDO> {
     @Update("update note set deleted = 0, deleted_at = null where id = #{id} and deleted = 1")
     int restore(@Param("id") Long id);
 
+    /** 侧栏文档树：全库文档的标题与归属，不带正文，一次取回也不重 */
+    @Select("""
+            select id, module, type, title, folder_id, word_count, pinned, updated_at
+            from note
+            where deleted = 0 and archived = 0
+            order by pinned desc, updated_at desc
+            """)
+    List<NoteDO> selectOutline();
+
+    /** 删除目录时把目录（含子孙）里的文档移入回收站，保留正文可恢复 */
+    @Update("""
+            <script>
+            update note set deleted = 1, deleted_at = #{at}
+            where deleted = 0 and folder_id in
+            <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </script>
+            """)
+    int moveFoldersToRecycle(@Param("ids") List<Long> ids, @Param("at") LocalDateTime at);
+
     @Delete("delete from note where id = #{id} and deleted = 1")
     int purge(@Param("id") Long id);
 

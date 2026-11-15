@@ -45,7 +45,9 @@ public class SchemaUpgrade implements ApplicationRunner {
         ensureColumn("task", "start_time", "VARCHAR(8)");
         ensureColumn("job_exec_log", "message", "VARCHAR(500)");
         ensureColumn("note", "deleted_at", "DATETIME");
+        ensureColumn("note", "folder_id", "BIGINT");
         ensureIndex("note", "idx_note_recycle", "deleted, deleted_at");
+        ensureIndex("note", "idx_note_folder", "folder_id");
         // 本次改动之前软删除的笔记没有时间戳，用最后修改时间兜底，否则永远不会被清理
         jdbcTemplate.update("update note set deleted_at = updated_at where deleted = 1 and deleted_at is null");
         migrateLegacyBookmarks();

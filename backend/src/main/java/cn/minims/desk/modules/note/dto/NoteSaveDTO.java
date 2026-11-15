@@ -18,6 +18,8 @@ public record NoteSaveDTO(
 
         String folder,
 
+        Long folderId,
+
         Boolean pinned
 ) {
 }

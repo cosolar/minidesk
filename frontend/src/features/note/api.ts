@@ -1,13 +1,17 @@
 import { http } from '@/core/http/client'
 
+export type NoteModule = 'work' | 'study' | 'life'
+
 export interface NoteSummary {
   id: string
   title: string
   /** 列表卡片摘要：后端剥掉 Markdown 后的纯文本，可能为空 */
   excerpt?: string
-  module: 'work' | 'study' | 'life'
+  module: NoteModule
   type: string
   tags: string | null
+  /** 所属目录，null 表示直接挂在板块根目录 */
+  folderId?: string | null
   wordCount: number
   pinned: boolean
   createdAt: string
@@ -19,6 +23,17 @@ export interface NoteDetail extends NoteSummary {
   folder: string | null
 }
 
+/** 侧栏文档树节点：只有标题与归属，不含正文 */
+export interface NoteOutline {
+  id: string
+  title: string
+  module: NoteModule
+  folderId: string | null
+  wordCount: number
+  pinned: boolean
+  updatedAt: string
+}
+
 export interface NotePayload {
   title?: string
   content: string
@@ -26,6 +41,21 @@ export interface NotePayload {
   type?: string
   tags?: string | null
   pinned?: boolean
+  folderId?: string | null
+}
+
+/** 笔记目录：工作 / 学习 / 生活是前端固定根，这里都是用户自建目录 */
+export interface NoteFolder {
+  id: string
+  name: string
+  module: NoteModule
+  parentId: string | null
+}
+
+export interface NoteFolderPayload {
+  name: string
+  module?: string
+  parentId?: string | null
 }
 
 export interface NotePage {
@@ -84,6 +114,9 @@ export const noteApi = {
   page(params: { module?: string; type?: string; keyword?: string; page?: number; size?: number }) {
     return http.get<NotePage>('/notes', params)
   },
+  outline() {
+    return http.get<NoteOutline[]>('/notes/outline')
+  },
   detail(id: string) {
     return http.get<NoteDetail>(`/notes/${id}`)
   },
@@ -92,6 +125,10 @@ export const noteApi = {
   },
   update(id: string, payload: NotePayload) {
     return http.put<NoteDetail>(`/notes/${id}`, payload)
+  },
+  /** 移动到目录；folderId 为空表示移到板块根目录 */
+  move(id: string, payload: { folderId: string | null; module?: string }) {
+    return http.patch<void>(`/notes/${id}/move`, payload)
   },
   togglePin(id: string, pinned: boolean) {
     return http.patch<void>(`/notes/${id}/pin`, { pinned })
@@ -119,6 +156,25 @@ export const noteApi = {
   },
   cancelShare(id: string) {
     return http.delete<void>(`/notes/${id}/share`)
+  },
+}
+
+export const noteFolderApi = {
+  list() {
+    return http.get<NoteFolder[]>('/note-folders')
+  },
+  create(payload: NoteFolderPayload) {
+    return http.post<NoteFolder>('/note-folders', payload)
+  },
+  rename(id: string, name: string) {
+    return http.put<NoteFolder>(`/note-folders/${id}`, { name })
+  },
+  move(id: string, parentId: string | null) {
+    return http.put<NoteFolder>(`/note-folders/${id}/move`, { parentId })
+  },
+  /** 删除目录：里面的文档会一起移入回收站 */
+  remove(id: string) {
+    return http.delete<{ moved: number }>(`/note-folders/${id}`)
   },
 }
 

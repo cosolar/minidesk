@@ -7,9 +7,11 @@ import cn.minims.desk.framework.satoken.PermissionCodes;
 import cn.minims.desk.modules.note.dto.NoteSaveDTO;
 import cn.minims.desk.modules.note.service.NoteService;
 import cn.minims.desk.modules.note.vo.NoteDetailVO;
+import cn.minims.desk.modules.note.vo.NoteOutlineVO;
 import cn.minims.desk.modules.note.vo.NoteRecycleBoard;
 import cn.minims.desk.modules.note.vo.NoteSummaryVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -51,6 +53,12 @@ public class NoteController {
         return Result.ok(noteService.detail(id));
     }
 
+    /** 侧栏文档树：全库文档的标题与归属，不带正文 */
+    @GetMapping("/outline")
+    public Result<List<NoteOutlineVO>> outline() {
+        return Result.ok(noteService.outline());
+    }
+
     @PostMapping
     @SaCheckPermission(PermissionCodes.NOTE_MANAGE)
     public Result<NoteDetailVO> create(@Valid @RequestBody NoteSaveDTO dto) {
@@ -67,6 +75,18 @@ public class NoteController {
     @SaCheckPermission(PermissionCodes.NOTE_MANAGE)
     public Result<Void> pin(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
         noteService.togglePin(id, Boolean.TRUE.equals(body.get("pinned")));
+        return Result.ok();
+    }
+
+    /** 拖拽移动：folderId 为空时按 module 移到板块根目录 */
+    @PatchMapping("/{id}/move")
+    @SaCheckPermission(PermissionCodes.NOTE_MANAGE)
+    public Result<Void> move(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Object rawFolder = body.get("folderId");
+        Long folderId = rawFolder == null || String.valueOf(rawFolder).isBlank()
+                ? null : Long.valueOf(String.valueOf(rawFolder));
+        Object rawModule = body.get("module");
+        noteService.moveToFolder(id, folderId, rawModule == null ? null : String.valueOf(rawModule));
         return Result.ok();
     }
 

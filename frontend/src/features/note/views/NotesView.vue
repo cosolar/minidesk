@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch, type Component } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Briefcase,
   Clock,
   Coffee,
-  Collection,
   CopyDocument,
   Delete,
   Document,
   EditPen,
-  Memo,
+  Folder,
+  FolderAdd,
   Notebook,
   Plus,
   Reading,
@@ -28,18 +28,21 @@ import dayjs from 'dayjs'
 import MarkdownEditor from '@/shared/components/MarkdownEditor.vue'
 import MarkdownPreview, { type MarkdownHeading } from '@/shared/components/MarkdownPreview.vue'
 import { useAppStore } from '@/core/stores/app'
+import NoteTree from '../components/NoteTree.vue'
 import {
   noteApi,
+  noteFolderApi,
+  type NoteFolder,
+  type NoteModule,
+  type NoteOutline,
   type NoteRecycleBoard,
   type NoteRecycleItem,
   type NoteShare,
   type NoteSharePayload,
   type NoteSummary,
 } from '../api'
-import { lifeLogApi, type LifeLog } from '@/features/life/lifelog/api'
 
 const route = useRoute()
-const router = useRouter()
 const queryClient = useQueryClient()
 const appStore = useAppStore()
 
@@ -68,124 +71,93 @@ const editorMode = computed<'ir' | 'sv'>(() =>
 /** 抽屉固定 420px 在窄屏会从左侧溢出，小屏改成整屏宽 */
 const recycleDrawerSize = computed(() => (viewportWidth.value < 480 ? '100%' : '420px'))
 
-/** 统一笔记：工作记录 / 学习笔记 / 生活日记，日记读的是 life_log */
-const TABS = [
-  { key: 'all', label: '全部笔记', short: '全部', icon: Collection, tone: 'all' },
-  { key: 'work', label: '工作记录', short: '工作', icon: Briefcase, tone: 'work' },
-  { key: 'study', label: '学习笔记', short: '学习', icon: Reading, tone: 'study' },
-  { key: 'diary', label: '生活日记', short: '日记', icon: Coffee, tone: 'life' },
-] as const
-
 const MODULE_LABEL: Record<string, string> = {
-  work: '工作记录',
-  study: '学习笔记',
-  life: '生活日记',
+  work: '工作',
+  study: '学习',
+  life: '生活',
 }
 
-/** 分类语义色与图标：侧栏筛选卡、列表卡片共用 */
+/** 分类语义色与图标：目录树、搜索结果卡片共用 */
 const MODULE_META: Record<string, { label: string; icon: Component; tone: string }> = {
-  work: { label: '工作记录', icon: Briefcase, tone: 'work' },
-  study: { label: '学习笔记', icon: Reading, tone: 'study' },
-  life: { label: '生活日记', icon: Coffee, tone: 'life' },
+  work: { label: '工作', icon: Briefcase, tone: 'work' },
+  study: { label: '学习', icon: Reading, tone: 'study' },
+  life: { label: '生活', icon: Coffee, tone: 'life' },
 }
 
 const DEFAULT_META = { label: '笔记', icon: Document, tone: 'all' }
 
-type TabKey = (typeof TABS)[number]['key']
-
-const activeTab = ref<TabKey>(route.query.module === 'work' ? 'work' : 'all')
-const isDiary = computed(() => activeTab.value === 'diary')
-const moduleFilter = computed(() =>
-  activeTab.value === 'work' || activeTab.value === 'study' ? activeTab.value : undefined,
-)
-
-const diaryQuery = useQuery({
-  queryKey: ['note-diaries'],
-  queryFn: () => lifeLogApi.page(undefined, 1, 100),
-  staleTime: 10_000,
+/** 侧栏当前选中的目录；选中文档时高亮以文档为准 */
+const selectedFolder = ref<{ module: NoteModule; folderId: string | null }>({
+  module: routeModule(),
+  folderId: null,
 })
 
-/** 不过滤的全量列表：只用于侧栏分类计数与累计字数，不参与搜索 */
-const overviewQuery = useQuery({
-  queryKey: ['notes-overview'],
-  queryFn: () => noteApi.page({ size: 100 }),
+function routeModule(): NoteModule {
+  const value = String(route.query.module ?? '')
+  return value === 'study' || value === 'life' ? value : 'work'
+}
+
+const folderQuery = useQuery({
+  queryKey: ['note-folders'],
+  queryFn: () => noteFolderApi.list(),
   staleTime: 30_000,
 })
 
-const diaries = computed(() => diaryQuery.data.value?.list ?? [])
-const overviewNotes = computed(() => overviewQuery.data.value?.list ?? [])
-
-const listQuery = useQuery({
-  queryKey: ['notes', moduleFilter, keyword],
-  queryFn: () =>
-    noteApi.page({ module: moduleFilter.value, keyword: keyword.value || undefined, size: 100 }),
-  enabled: computed(() => !isDiary.value),
+const outlineQuery = useQuery({
+  queryKey: ['note-outline'],
+  queryFn: () => noteApi.outline(),
   staleTime: 10_000,
 })
 
-const notes = computed(() => listQuery.data.value?.list ?? [])
-const sideCount = computed(() => (isDiary.value ? diaries.value.length : notes.value.length))
+const folders = computed(() => folderQuery.data.value ?? [])
+const outlineNotes = computed(() => outlineQuery.data.value ?? [])
+
+/** 搜索走服务端全文，只在有关键词时请求 */
+const listQuery = useQuery({
+  queryKey: ['notes', keyword],
+  queryFn: () => noteApi.page({ keyword: keyword.value || undefined, size: 50 }),
+  enabled: computed(() => Boolean(keyword.value.trim())),
+  staleTime: 10_000,
+})
+
+const searchNotes = computed(() => listQuery.data.value?.list ?? [])
+const sideCount = computed(() => searchNotes.value.length)
 const totalWords = computed(() =>
-  overviewNotes.value.reduce((sum, note) => sum + (note.wordCount ?? 0), 0),
+  outlineNotes.value.reduce((sum, note) => sum + (note.wordCount ?? 0), 0),
 )
 
-type NoteGroup = { label: string; items: NoteSummary[] }
-type DiaryGroup = { label: string; items: LifeLog[] }
-
-/** 侧栏按「置顶 / 最近 7 天 / 更早」分段，笔记少时也不会散成一列 */
-const groupedNotes = computed<NoteGroup[]>(() => {
-  const pinned = notes.value.filter((note) => note.pinned)
-  const rest = notes.value.filter((note) => !note.pinned)
-  const weekAgo = dayjs().subtract(7, 'day')
-  const recent = rest.filter((note) => dayjs(note.updatedAt).isAfter(weekAgo))
-  const older = rest.filter((note) => !dayjs(note.updatedAt).isAfter(weekAgo))
-  const groups: NoteGroup[] = []
-  if (pinned.length) groups.push({ label: '置顶', items: pinned })
-  if (recent.length) groups.push({ label: '最近 7 天', items: recent })
-  if (older.length) groups.push({ label: '更早', items: older })
-  return groups
+const treeSelectedKey = computed(() => {
+  if (selectedId.value) {
+    return `note:${selectedId.value}`
+  }
+  const current = selectedFolder.value
+  return current.folderId ? `folder:${current.folderId}` : `root:${current.module}`
 })
 
-const diaryGroups = computed<DiaryGroup[]>(() => {
-  const groups = new Map<string, LifeLog[]>()
-  diaries.value.forEach((item) => {
-    const label = dayjs(item.logDate).isValid()
-      ? dayjs(item.logDate).format('YYYY 年 M 月')
-      : '生活日记'
-    const bucket = groups.get(label) ?? []
-    bucket.push(item)
-    groups.set(label, bucket)
-  })
-  return Array.from(groups, ([label, items]) => ({ label, items }))
+const selectedFolderName = computed(() => {
+  const current = selectedFolder.value
+  if (current.folderId) {
+    return folders.value.find((folder) => folder.id === current.folderId)?.name ?? '目录'
+  }
+  return MODULE_LABEL[current.module] ?? '笔记'
 })
 
-function tabCount(key: TabKey): number {
-  if (key === 'all') return overviewNotes.value.length
-  if (key === 'diary') return diaries.value.length
-  return overviewNotes.value.filter((note) => note.module === key).length
-}
+/** 目录视图只列当前目录的直接文档，子目录内容在左侧树里展开 */
+const folderNotes = computed(() => {
+  const current = selectedFolder.value
+  return outlineNotes.value.filter((note) =>
+    current.folderId
+      ? note.folderId === current.folderId
+      : !note.folderId && note.module === current.module,
+  )
+})
 
-function noteMeta(note: NoteSummary) {
+function noteMeta(note: Pick<NoteSummary, 'module'>) {
   return MODULE_META[note.module] ?? DEFAULT_META
 }
 
 function formatWords(count: number): string {
   return `${(count ?? 0).toLocaleString('zh-CN')} 字`
-}
-
-/** 日记列表接口带正文，前端裁一段纯文本摘要给卡片用 */
-function excerptOf(content: string | null, title: string): string {
-  if (!content?.trim()) return ''
-  const text = content
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^\s{0,3}#{1,6}\s+.*$/gm, ' ')
-    .replace(/[`*_~|>]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const cleaned = title && text.startsWith(title) ? text.slice(title.length).trim() : text
-  return cleaned.length > 84 ? `${cleaned.slice(0, 84)}…` : cleaned
 }
 
 const draft = reactive({
@@ -226,15 +198,32 @@ watch(selectedId, () => {
   activeHeading.value = ''
 })
 
-const activeModule = computed(() => detailQuery.data.value?.module ?? moduleFilter.value ?? 'work')
+const activeModule = computed(
+  () => detailQuery.data.value?.module ?? selectedFolder.value.module ?? 'work',
+)
 const updatedAtText = computed(() => detailQuery.data.value?.updatedAt ?? '')
 const wordCount = computed(() => draft.content.replace(/\s/g, '').length)
 
+/** 文档树与搜索结果都来自这两个 key，写操作后一起失效 */
+function invalidateNotes(): Promise<void> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['notes'] }),
+    queryClient.invalidateQueries({ queryKey: ['note-outline'] }),
+  ]).then(() => undefined)
+}
+
 const createMutation = useMutation({
-  mutationFn: () =>
-    noteApi.create({ title: '', content: '', module: moduleFilter.value ?? 'work', type: 'note' }),
+  mutationFn: (target: { module: NoteModule; folderId: string | null }) =>
+    noteApi.create({
+      title: '',
+      content: '',
+      module: target.module,
+      type: 'note',
+      folderId: target.folderId,
+    }),
   onSuccess: async (note) => {
-    await queryClient.invalidateQueries({ queryKey: ['notes'] })
+    await invalidateNotes()
+    selectedFolder.value = { module: note.module, folderId: note.folderId ?? null }
     selectedId.value = note.id
     // 新建即写作，直接进编辑模式
     mode.value = 'edit'
@@ -250,7 +239,7 @@ const saveMutation = useMutation({
     }),
   onSuccess: () => {
     saveState.value = 'saved'
-    queryClient.invalidateQueries({ queryKey: ['notes'] })
+    void invalidateNotes()
   },
   onError: () => {
     saveState.value = 'dirty'
@@ -291,14 +280,10 @@ watch(
 )
 
 function onCreate(): void {
-  if (isDiary.value) {
-    router.push('/life/diary')
-    return
-  }
-  createMutation.mutate()
+  createMutation.mutate(selectedFolder.value)
 }
 
-function selectNote(note: NoteSummary): void {
+function selectNote(note: NoteSummary | NoteOutline): void {
   if (note.id === selectedId.value) {
     return
   }
@@ -306,6 +291,155 @@ function selectNote(note: NoteSummary): void {
     persist()
   }
   selectedId.value = note.id
+  selectedFolder.value = { module: note.module, folderId: note.folderId ?? null }
+}
+
+function selectFolder(payload: { module: NoteModule; folderId: string | null }): void {
+  if (saveState.value === 'dirty') {
+    persist()
+  }
+  selectedId.value = null
+  selectedFolder.value = payload
+}
+
+/** 新建文档：目录树里的「新建文档」会在指定目录下创建 */
+function createNoteIn(payload: { module: NoteModule; folderId: string | null }): void {
+  createMutation.mutate(payload)
+}
+
+async function promptFolderName(title: string, initial = ''): Promise<string | null> {
+  const result = await ElMessageBox.prompt('目录名', title, {
+    inputValue: initial,
+    inputPlaceholder: '例如：需求文档',
+    inputValidator: (value: string) => (value.trim() ? true : '目录名不能为空'),
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+  }).catch(() => null)
+  return result ? result.value.trim() : null
+}
+
+const folderMutation = useMutation({
+  mutationFn: (input: { action: 'create' | 'rename'; name: string; module?: NoteModule; parentId?: string | null; id?: string }) => {
+    if (input.action === 'rename' && input.id) {
+      return noteFolderApi.rename(input.id, input.name)
+    }
+    return noteFolderApi.create({ name: input.name, module: input.module, parentId: input.parentId })
+  },
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: ['note-folders'] })
+    ElMessage.success('目录已更新')
+  },
+})
+
+async function createFolderIn(payload: { module: NoteModule; parentId: string | null }): Promise<void> {
+  const name = await promptFolderName('新建目录')
+  if (!name) {
+    return
+  }
+  folderMutation.mutate({ action: 'create', name, module: payload.module, parentId: payload.parentId })
+}
+
+async function renameFolder(folder: NoteFolder): Promise<void> {
+  const name = await promptFolderName('重命名目录', folder.name)
+  if (!name || name === folder.name) {
+    return
+  }
+  folderMutation.mutate({ action: 'rename', name, id: folder.id })
+}
+
+async function deleteFolder(folder: NoteFolder): Promise<void> {
+  const confirmed = await ElMessageBox.confirm(
+    `删除「${folder.name}」？里面的文档会一起移入回收站，可在回收站恢复。`,
+    '删除目录',
+    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+  ).catch(() => false)
+  if (!confirmed) {
+    return
+  }
+  const result = await noteFolderApi.remove(folder.id)
+  if (selectedFolder.value.folderId === folder.id) {
+    selectedFolder.value = { module: folder.module, folderId: null }
+    selectedId.value = null
+  }
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['note-folders'] }),
+    invalidateNotes(),
+  ])
+  ElMessage.success(
+    result.moved > 0 ? `已删除目录，${result.moved} 篇文档移入回收站` : '已删除目录',
+  )
+}
+
+const moveNoteMutation = useMutation({
+  mutationFn: (input: { noteId: string; folderId: string | null; module: NoteModule }) =>
+    noteApi.move(input.noteId, { folderId: input.folderId, module: input.module }),
+  onSuccess: async () => {
+    await invalidateNotes()
+    ElMessage.success('已移动')
+  },
+})
+
+const moveFolderMutation = useMutation({
+  mutationFn: (input: { folderId: string; parentId: string | null }) =>
+    noteFolderApi.move(input.folderId, input.parentId),
+  onSuccess: async () => {
+    await queryClient.invalidateQueries({ queryKey: ['note-folders'] })
+    ElMessage.success('已移动')
+  },
+})
+
+/** 「移动到…」弹窗：目标目录下拉由全部目录平铺成带路径的选项 */
+const moveDialogVisible = ref(false)
+const moveTarget = ref<string>('root')
+const moveRequestNote = ref<NoteOutline | null>(null)
+
+const moveOptions = computed(() => {
+  const options: { value: string; label: string }[] = [
+    { value: 'root:work', label: '工作（根目录）' },
+    { value: 'root:study', label: '学习（根目录）' },
+    { value: 'root:life', label: '生活（根目录）' },
+  ]
+  const byParent = new Map<string | null, NoteFolder[]>()
+  folders.value.forEach((folder) => {
+    const bucket = byParent.get(folder.parentId) ?? []
+    bucket.push(folder)
+    byParent.set(folder.parentId, bucket)
+  })
+  const walk = (parentId: string | null, prefix: string, module: NoteModule): void => {
+    for (const folder of byParent.get(parentId) ?? []) {
+      if (folder.module !== module) {
+        continue
+      }
+      const path = `${prefix} / ${folder.name}`
+      options.push({ value: `folder:${folder.id}`, label: path })
+      walk(folder.id, path, module)
+    }
+  }
+  walk(null, '工作', 'work')
+  walk(null, '学习', 'study')
+  walk(null, '生活', 'life')
+  return options
+})
+
+function openMoveDialog(note: NoteOutline): void {
+  moveRequestNote.value = note
+  moveTarget.value = note.folderId ? `folder:${note.folderId}` : `root:${note.module}`
+  moveDialogVisible.value = true
+}
+
+function confirmMove(): void {
+  const note = moveRequestNote.value
+  if (!note) {
+    return
+  }
+  const [kind, value] = moveTarget.value.split(':')
+  const payload =
+    kind === 'folder'
+      ? { noteId: note.id, folderId: value, module: note.module }
+      : { noteId: note.id, folderId: null, module: value as NoteModule }
+  moveDialogVisible.value = false
+  moveRequestNote.value = null
+  moveNoteMutation.mutate(payload)
 }
 
 function switchMode(next: ViewMode): void {
@@ -340,11 +474,11 @@ async function confirmRemove(id: string, title: string): Promise<void> {
     draft.content = ''
     mode.value = 'preview'
   }
-  await queryClient.invalidateQueries({ queryKey: ['notes'] })
+  await invalidateNotes()
   ElMessage.success('已移入回收站，可在回收站恢复')
 }
 
-function removeNote(note: NoteSummary): void {
+function removeNote(note: { id: string; title: string }): void {
   void confirmRemove(note.id, note.title)
 }
 
@@ -360,7 +494,7 @@ async function togglePin(): Promise<void> {
   }
   draft.pinned = !draft.pinned
   await noteApi.togglePin(selectedId.value, draft.pinned)
-  queryClient.invalidateQueries({ queryKey: ['notes'] })
+  void invalidateNotes()
 }
 
 function relative(value: string): string {
@@ -560,8 +694,7 @@ async function restoreRecycled(item: NoteRecycleItem): Promise<void> {
     await noteApi.restore(item.id)
     await Promise.all([
       loadRecycle(),
-      queryClient.invalidateQueries({ queryKey: ['notes'] }),
-      queryClient.invalidateQueries({ queryKey: ['notes-overview'] }),
+      invalidateNotes(),
     ])
     ElMessage.success('已恢复到原分类')
   } finally {
@@ -618,7 +751,7 @@ async function clearRecycled(): Promise<void> {
             <span class="note-side__mark"><el-icon><Notebook /></el-icon></span>
             <span class="note-side__heading">
               <strong>笔记</strong>
-              <small>{{ overviewNotes.length }} 篇 · {{ formatWords(totalWords) }}</small>
+              <small>{{ outlineNotes.length }} 篇 · {{ formatWords(totalWords) }}</small>
             </span>
           </div>
           <div class="note-side__actions">
@@ -627,7 +760,7 @@ async function clearRecycled(): Promise<void> {
                 <el-icon><Delete /></el-icon>
               </button>
             </el-tooltip>
-            <el-tooltip :content="isDiary ? '去写日记' : '新建笔记'" placement="left">
+            <el-tooltip content="新建笔记" placement="left">
               <button type="button" class="note-create" aria-label="新建" @click="onCreate">
                 <el-icon><Plus /></el-icon>
               </button>
@@ -635,27 +768,7 @@ async function clearRecycled(): Promise<void> {
           </div>
         </header>
 
-        <div class="note-filters" role="tablist" aria-label="笔记分类">
-          <button
-            v-for="tab in TABS"
-            :key="tab.key"
-            type="button"
-            role="tab"
-            class="note-filter"
-            :class="[`is-${tab.tone}`, { 'is-active': activeTab === tab.key }]"
-            :aria-selected="activeTab === tab.key"
-            :title="tab.label"
-            @click="activeTab = tab.key"
-          >
-            <span class="note-filter__icon">
-              <el-icon><component :is="tab.icon" /></el-icon>
-            </span>
-            <span class="note-filter__label">{{ tab.short }}</span>
-            <span class="note-filter__count">{{ tabCount(tab.key) }}</span>
-          </button>
-        </div>
-
-        <div v-if="!isDiary" class="note-search">
+        <div class="note-search">
           <el-input
             v-model="keyword"
             :prefix-icon="Search"
@@ -668,58 +781,15 @@ async function clearRecycled(): Promise<void> {
       </div>
 
       <div class="note-side__list">
-        <template v-if="isDiary">
-          <template v-if="diaryGroups.length">
-            <div v-for="group in diaryGroups" :key="group.label" class="note-group">
-              <div class="note-group__label">
-                <span>{{ group.label }}</span><i /><em>{{ group.items.length }}</em>
-              </div>
-              <ul class="note-group__items">
-                <li
-                  v-for="item in group.items"
-                  :key="item.id"
-                  class="note-card is-life"
-                  @click="router.push('/life/diary')"
-                >
-                  <span class="note-card__rail" />
-                  <div class="note-card__head">
-                    <span class="note-card__icon"><el-icon><Memo /></el-icon></span>
-                    <span class="note-card__title">{{ item.title || '无标题' }}</span>
-                  </div>
-                  <p class="note-card__excerpt">
-                    {{ excerptOf(item.content, item.title) || '空白日记，点开写点什么…' }}
-                  </p>
-                  <div class="note-card__meta">
-                    <span class="note-card__time">{{ item.logDate }}</span>
-                    <span class="note-card__tag">{{ item.mood || '生活日记' }}</span>
-                  </div>
-                </li>
-              </ul>
-            </div>
-          </template>
-          <div v-else class="note-empty">
-            <span class="note-empty__art"><el-icon><Coffee /></el-icon></span>
-            <strong>还没有日记</strong>
-            <p>记录今天的心情和小事，慢慢攒成生活档案。</p>
-            <el-button size="small" type="primary" :icon="EditPen" @click="router.push('/life/diary')">
-              去写日记
-            </el-button>
-          </div>
-        </template>
-
-        <template v-else>
+        <template v-if="keyword">
           <div v-if="listQuery.isLoading.value" class="note-skeletons">
             <div v-for="n in 3" :key="n" class="note-skeleton"><i /><i /><i /></div>
           </div>
 
-          <template v-else-if="groupedNotes.length">
-            <div v-for="group in groupedNotes" :key="group.label" class="note-group">
-              <div class="note-group__label">
-                <span>{{ group.label }}</span><i /><em>{{ group.items.length }}</em>
-              </div>
-              <ul class="note-group__items">
+          <template v-else-if="searchNotes.length">
+            <ul class="note-group__items">
                 <li
-                  v-for="note in group.items"
+                  v-for="note in searchNotes"
                   :key="note.id"
                   class="note-card"
                   :class="[
@@ -753,27 +823,32 @@ async function clearRecycled(): Promise<void> {
                     <el-icon><Delete /></el-icon>
                   </button>
                 </li>
-              </ul>
-            </div>
+            </ul>
           </template>
 
           <div v-else class="note-empty">
-            <span class="note-empty__art">
-              <el-icon><component :is="keyword ? Search : Memo" /></el-icon>
-            </span>
-            <strong>{{ keyword ? '没有找到匹配的笔记' : '这里还空空如也' }}</strong>
-            <p>{{ keyword ? '换个关键词试试，或清空搜索条件。' : '用 Markdown 写下第一个想法，自动保存不丢字。' }}</p>
-            <el-button
-              v-if="!keyword"
-              size="small"
-              type="primary"
-              :icon="Plus"
-              @click="createMutation.mutate()"
-            >
-              新建一篇
-            </el-button>
+            <span class="note-empty__art"><el-icon><Search /></el-icon></span>
+            <strong>没有找到匹配的笔记</strong>
+            <p>换个关键词试试，或清空搜索条件。</p>
           </div>
         </template>
+
+        <NoteTree
+          v-else
+          :folders="folders"
+          :notes="outlineNotes"
+          :selected-key="treeSelectedKey"
+          @select-folder="selectFolder"
+          @select-note="selectNote"
+          @create-folder="createFolderIn"
+          @create-note="createNoteIn"
+          @rename-folder="renameFolder"
+          @delete-folder="deleteFolder"
+          @delete-note="removeNote"
+          @move-note="moveNoteMutation.mutate"
+          @move-folder="moveFolderMutation.mutate"
+          @move-request="openMoveDialog"
+        />
       </div>
 
       <footer class="note-side__foot">
@@ -930,15 +1005,74 @@ async function clearRecycled(): Promise<void> {
         </div>
       </template>
 
-      <div v-else class="note-main__empty">
-        <span class="note-main__empty-icon">
-          <el-icon><Document /></el-icon>
-        </span>
-        <h2>选择一篇笔记开始阅读</h2>
-        <p>左侧按工作、学习、生活分组，也可以直接新建一篇，用 Markdown 记录想法。</p>
-        <el-button type="primary" :icon="Plus" @click="createMutation.mutate()">新建笔记</el-button>
-      </div>
+      <template v-else>
+        <header class="folder-bar">
+          <div class="folder-bar__title">
+            <span class="folder-bar__icon"><el-icon><Folder /></el-icon></span>
+            <strong>{{ selectedFolderName }}</strong>
+            <small>{{ folderNotes.length }} 篇文档</small>
+          </div>
+          <div class="folder-bar__actions">
+            <el-button
+              size="small"
+              :icon="FolderAdd"
+              @click="createFolderIn({ module: selectedFolder.module, parentId: selectedFolder.folderId })"
+            >
+              新建子目录
+            </el-button>
+            <el-button size="small" type="primary" :icon="Plus" @click="onCreate">新建文档</el-button>
+          </div>
+        </header>
+
+        <div v-if="folderNotes.length" class="folder-grid">
+          <article
+            v-for="note in folderNotes"
+            :key="note.id"
+            class="folder-card"
+            @click="selectNote(note)"
+          >
+            <div class="folder-card__head">
+              <span class="folder-card__icon"><el-icon><Document /></el-icon></span>
+              <strong>{{ note.title || '无标题' }}</strong>
+            </div>
+            <div class="folder-card__meta">
+              <span><el-icon><Clock /></el-icon>{{ relative(note.updatedAt) }}</span>
+              <span>{{ formatWords(note.wordCount) }}</span>
+            </div>
+            <button
+              type="button"
+              class="folder-card__delete"
+              aria-label="删除"
+              @click.stop="removeNote(note)"
+            >
+              <el-icon><Delete /></el-icon>
+            </button>
+          </article>
+        </div>
+
+        <div v-else class="note-main__empty">
+          <span class="note-main__empty-icon"><el-icon><Document /></el-icon></span>
+          <h2>「{{ selectedFolderName }}」还没有文档</h2>
+          <p>在这里新建一篇 Markdown 文档，或把左侧的文档拖进来。</p>
+          <el-button type="primary" :icon="Plus" @click="onCreate">新建文档</el-button>
+        </div>
+      </template>
     </section>
+
+    <el-dialog v-model="moveDialogVisible" title="移动到" width="420px">
+      <el-select v-model="moveTarget" class="move-select" filterable placeholder="选择目标目录">
+        <el-option
+          v-for="option in moveOptions"
+          :key="option.value"
+          :label="option.label"
+          :value="option.value"
+        />
+      </el-select>
+      <template #footer>
+        <el-button @click="moveDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmMove">移动</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="shareVisible" title="分享这篇笔记" width="520px">
       <el-skeleton v-if="shareLoading" :rows="4" animated />
@@ -1398,92 +1532,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   margin-top: 10px;
 }
 
-// 分类筛选：2×2 彩色卡片，比原来的等分文字条更清晰
-.note-filters {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 14px;
-}
-
-.note-filter {
-  --tone: var(--brand-500);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 6px 7px;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition:
-    border-color $duration-fast $ease-out,
-    background $duration-fast $ease-out;
-
-  &.is-work {
-    --tone: var(--c-work);
-  }
-
-  &.is-study {
-    --tone: var(--c-study);
-  }
-
-  &.is-life {
-    --tone: var(--c-life);
-  }
-
-  &:hover {
-    border-color: color-mix(in srgb, var(--tone) 38%, var(--border-color));
-    background: var(--bg-card);
-  }
-
-  &.is-active {
-    border-color: color-mix(in srgb, var(--tone) 45%, var(--border-color));
-    background: color-mix(in srgb, var(--tone) 9%, var(--bg-card));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 8%, transparent);
-
-    .note-filter__label {
-      color: var(--tone);
-      font-weight: 650;
-    }
-
-    .note-filter__count {
-      background: color-mix(in srgb, var(--tone) 12%, transparent);
-      color: var(--tone);
-    }
-  }
-
-  &__icon {
-    @include flex-center;
-    flex: 0 0 auto;
-    width: 19px;
-    height: 19px;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--tone) 14%, transparent);
-    color: var(--tone);
-    font-size: 11px;
-  }
-
-  &__label {
-    font-size: 11.5px;
-    white-space: nowrap;
-  }
-
-  &__count {
-    min-width: 18px;
-    margin-left: auto;
-    padding: 1px 4px;
-    border-radius: 6px;
-    background: var(--bg-subtle);
-    color: var(--text-tertiary);
-    font-family: var(--font-number);
-    font-size: 10px;
-    text-align: center;
-  }
-}
-
+// 搜索框
 .note-search {
   display: flex;
   align-items: center;
@@ -1890,23 +1939,6 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   .note-side__heading small,
   .note-side__foot {
     display: none;
-  }
-
-  .note-filters {
-    display: flex;
-    gap: 6px;
-    margin-top: 10px;
-    overflow-x: auto;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
-
-  .note-filter {
-    flex: 0 0 auto;
-    padding: 5px 9px;
   }
 
   .note-search {
@@ -2377,6 +2409,166 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   color: var(--text-tertiary);
   font-size: 12px;
   line-height: 1.7;
+}
+
+// ---------- 目录视图 ----------
+.folder-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.folder-bar__title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  strong {
+    overflow: hidden;
+    max-width: 320px;
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  small {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+}
+
+.folder-bar__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--brand-500);
+  font-size: 16px;
+}
+
+.folder-bar__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.folder-grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  padding: 18px 20px 28px;
+  overflow-y: auto;
+}
+
+.folder-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: border-color $duration-fast, transform $duration-fast, box-shadow $duration-fast;
+
+  &:hover {
+    border-color: var(--brand-300, var(--brand-500));
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  &:hover .folder-card__delete {
+    opacity: 1;
+  }
+}
+
+.folder-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  strong {
+    overflow: hidden;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.folder-card__icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-tertiary);
+}
+
+.folder-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+.folder-card__delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity $duration-fast, background $duration-fast;
+
+  &:hover {
+    background: var(--bg-subtle);
+    color: var(--danger-500, #dc2626);
+  }
+}
+
+.move-select {
+  width: 100%;
+}
+
+// 窄屏按钮会把目录名挤成「工…」，标题独占一行、操作另起一行右对齐
+@include respond-below(md) {
+  .folder-bar__title {
+    flex-basis: 100%;
+  }
+
+  .folder-bar__actions {
+    justify-content: flex-end;
+  }
+
+  .folder-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
 }
 
 // ---------- 分享弹窗 ----------

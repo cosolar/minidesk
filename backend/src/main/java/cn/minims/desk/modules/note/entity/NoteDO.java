@@ -32,6 +32,9 @@ public class NoteDO {
 
     private String folder;
 
+    /** 所属目录；null 表示直接挂在板块根目录下 */
+    private Long folderId;
+
     private Integer pinned;
 
     private Integer archived;

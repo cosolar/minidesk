@@ -10,7 +10,7 @@
 
 MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活三大板块 + 首页看板。当前交付形态是 **Web（PC 优先，窄屏有专属底部导航）**，也能打成内置前端的单 Jar；Tauri 桌面端仍在路线图中。另有一套**独立的管理后台**（`/console`，管理员登录直达，界面与用户端不同）。
 
-**当前状态**（2026-11-15，v0.2.0）：统一入口 5 个、板块页 13 个、隐藏入口 3 个、管理后台 1 套；五套主题、64 张表、三套建表 SQL；Quartz 调度、备份恢复、审计 AOP、单 Jar、移动端 TabBar、网站导航与网盘、SQLite / MySQL 双运行时已落地，开源文档已补齐。
+**当前状态**（2026-11-15，v0.2.0）：统一入口 5 个、板块页 13 个、隐藏入口 3 个、管理后台 1 套；五套主题、65 张表、三套建表 SQL；Quartz 调度、备份恢复、审计 AOP、单 Jar、移动端 TabBar、网站导航与网盘、SQLite / MySQL 双运行时已落地，开源文档已补齐。
 
 > 开源交付说明见 [README.md](README.md)、[docs/README.md](docs/README.md) 与 [CHANGELOG.md](CHANGELOG.md)。设计总纲里标注「规划」「排期」「待确认」的章节不代表已实现。
 
@@ -35,6 +35,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 - ✅ 移动端：底部 5 项 TabBar，顶栏精简；后台侧栏窄屏转横向菜单
 - ✅ 书签 `/bookmark`：分类 / 站点 CRUD、搜索、置顶、拖拽排序、点击统计、一键导入常用站点；`SchemaUpgrade` 迁移旧 `nav_link(module='work')`
 - ✅ 网盘 `/drive`：目录、上传 / 预览 / 下载 / 重命名 / 删除，本地磁盘与 S3 兼容对象存储（纯 JDK SigV4）双后端，SecretKey 加密落库
+- ✅ 笔记 `/note`：左侧目录树以工作 / 学习 / 生活为固定根，可多级自建目录并在目录内建 Markdown 文档；拖拽与右键菜单移动、回收站、分享短链
 - ✅ 数据库：SQLite（默认）与 MySQL 8（生产）运行时双支持；`DbDialect` 按 JDBC 元数据判方言，逻辑备份 / 恢复与 `scripts/migrate_sqlite_to_mysql.py` 旧库迁移已落地
 - ⏳ 待做：Tauri、PostgreSQL 运行时适配、自动化测试、逐页深度重设计、集群调度
 
@@ -51,7 +52,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 |---|---|---|
 | 1 | `README.md` / `docs/README.md` | 项目现状、文档索引、快速开始 |
 | 2 | `docs/MiniDesk开发文档.md` | 产品范围、功能矩阵、架构决策、排期 |
-| 3 | `docs/数据库设计.md` | 64 张表、字段、索引、三库策略 |
+| 3 | `docs/数据库设计.md` | 65 张表、字段、索引、三库策略 |
 | 4 | `docs/接口清单.md` | 接口契约、错误码、权限码 |
 | 5 | `docs/部署指南.md` | 本地开发、生产部署、备份与 FAQ |
 | 6 | 本文件 | 编码规范、工作流、验收标准 |
@@ -599,6 +600,8 @@ feat(work): link tasks to projects and calendar
 | 前端端口 | 5173 被占用，固定 5180；`vite preview` 不继承 dev 的 proxy，必须单独配 `preview.proxy` |
 | 本机 Vite dev | 沙箱会拦截 Vite 清理 `node_modules/.vite/deps_temp_*`（批量删除保护），本机用 `npm run preview` 验证；用户自己的终端 `npm run dev` 正常 |
 | 首个管理员 | 由「库中第一个注册者」产生，靠 `UPDATE sys_config ... AND config_value='false'` 抢占，不要改成查 count 再插 |
+| MyBatis-Plus 清空字段 | `updateById` 默认忽略 null 字段；把文档移回板块根目录（`folder_id=null`）必须用 `Wrappers.lambdaUpdate().set(...)`，否则接口 200 但字段没变 |
+| SCSS 媒体查询位置 | `@include respond-below()` 块要写在被覆盖规则之后；同文件里写在前面会被后面的基础样式盖掉（笔记目录栏标题曾因此被压成「工…」） |
 
 ### 15.z 主题、品牌与账号（2026-11-12 深夜）
 
@@ -672,4 +675,5 @@ chrome --headless=new --window-size=1512,1260 --virtual-time-budget=15000 \
 
 **5. 文件读取必须按 user_id 过滤，不能只靠 id。**
 `sys_file.id` 是自增的，猜 id 就能拿到别人上传的图。`FileService.loadOwned(id, userId)` 是唯一入口。
+
 
