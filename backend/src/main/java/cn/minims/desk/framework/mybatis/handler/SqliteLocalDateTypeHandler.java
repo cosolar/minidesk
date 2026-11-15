@@ -10,7 +10,8 @@ import org.apache.ibatis.type.JdbcType;
 import org.apache.ibatis.type.MappedTypes;
 
 /**
- * SQLite 日期以 TEXT 存储，见 SqliteLocalDateTimeTypeHandler。
+ * 统一以 yyyy-MM-dd 字符串读写日期列，SQLite 与 MySQL 通用。
+ * 见 SqliteLocalDateTimeTypeHandler。
  */
 @MappedTypes(LocalDate.class)
 public class SqliteLocalDateTypeHandler extends BaseTypeHandler<LocalDate> {
@@ -40,6 +41,11 @@ public class SqliteLocalDateTypeHandler extends BaseTypeHandler<LocalDate> {
         if (value == null || value.isBlank()) {
             return null;
         }
-        return LocalDate.parse(value);
+        String text = value.trim().replace('T', ' ');
+        // MySQL DATE 用 getString 就是 10 位；个别驱动会带出时间部分，截断即可
+        if (text.length() > 10) {
+            text = text.substring(0, 10);
+        }
+        return LocalDate.parse(text);
     }
 }

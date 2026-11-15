@@ -63,7 +63,9 @@ $shadow-float: 0 8px 28px rgba(23, 74, 60, 0.1);
 $sidebar-width: 200px;
 $sidebar-collapsed-width: 72px;
 $header-height: 64px;
-$content-padding: 24px;
+// 内容区左右只留最小呼吸位；顶栏、页面、Hero 通栏都以它为基准，
+// 避免宽屏下出现居中限宽造成的两侧空白。
+$content-padding: 12px;
 
 // 动效
 $ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);

@@ -3,6 +3,8 @@ import { http } from '@/core/http/client'
 export interface NoteSummary {
   id: string
   title: string
+  /** 列表卡片摘要：后端剥掉 Markdown 后的纯文本，可能为空 */
+  excerpt?: string
   module: 'work' | 'study' | 'life'
   type: string
   tags: string | null

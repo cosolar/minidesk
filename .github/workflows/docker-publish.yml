@@ -14,7 +14,8 @@ name: Publish Docker image
 # 未配置时，推送任务会在「检查凭据」这一步带着明确提示失败，而不是卡在登录。
 #
 # 镜像内容见仓库根 Dockerfile：多阶段构建 Vue 3 前端与 Spring Boot 单 Jar，
-# 运行镜像只有一个 Java 进程，默认 SQLite，数据卷 /data。
+# 运行镜像只有一个 Java 进程，默认 SQLite；生产可由环境变量切到外部 MySQL，
+# /data 仍保存 .secret、附件、网盘本地文件与备份包。
 
 on:
   push:
@@ -230,6 +231,14 @@ jobs:
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
             "bash /tmp/deploy.sh /tmp/minidesk-image.tar.gz '$DEPLOY_PATH'"
+
+      # 服务器的 compose / entrypoint / 文档是源码的一部分，跟随 main 更新；
+      # deploy/.env 被 .gitignore 忽略，本地写入的密钥与数据库凭据不会被覆盖。
+      - name: Sync the deployment checkout
+        run: |
+          ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd '$DEPLOY_PATH' && git fetch origin main && git pull --ff-only origin main"
 
       - name: Roll the container on the server
         run: |

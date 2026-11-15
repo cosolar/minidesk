@@ -1,5 +1,6 @@
 package cn.minims.desk.bootstrap;
 
+import cn.minims.desk.framework.db.DbDialect;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
@@ -13,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 启动种子数据：角色、权限、站点配置。
  *
- * <p>使用 INSERT OR IGNORE 保证幂等（SQLite 方言；切换 MySQL / PG 时改为 ON CONFLICT / ON DUPLICATE KEY）。
+ * <p>幂等插入由 {@link DbDialect#insertIgnore} 生成，SQLite 与 MySQL 共用同一段逻辑。
  */
 @Component
 public class DataInitializer implements ApplicationRunner {
@@ -22,9 +23,11 @@ public class DataInitializer implements ApplicationRunner {
     private static final DateTimeFormatter DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final JdbcTemplate jdbcTemplate;
+    private final DbDialect dialect;
 
-    public DataInitializer(JdbcTemplate jdbcTemplate) {
+    public DataInitializer(JdbcTemplate jdbcTemplate, DbDialect dialect) {
         this.jdbcTemplate = jdbcTemplate;
+        this.dialect = dialect;
     }
 
     @Override
@@ -33,12 +36,10 @@ public class DataInitializer implements ApplicationRunner {
         String now = LocalDateTime.now().format(DATETIME);
 
         // 内置角色
-        jdbcTemplate.update(
-                "insert or ignore into sys_role (code, name, built_in, remark, created_at) values (?,?,?,?,?)",
-                "ADMIN", "管理员", 1, "系统管理：账号、备份、调度、集成配置", now);
-        jdbcTemplate.update(
-                "insert or ignore into sys_role (code, name, built_in, remark, created_at) values (?,?,?,?,?)",
-                "MEMBER", "家庭成员", 1, "全部业务功能，无系统管理权限", now);
+        String insertRole = dialect.insertIgnore("sys_role",
+                "(code, name, built_in, remark, created_at)") + " values (?,?,?,?,?)";
+        jdbcTemplate.update(insertRole, "ADMIN", "管理员", 1, "系统管理：账号、备份、调度、集成配置", now);
+        jdbcTemplate.update(insertRole, "MEMBER", "家庭成员", 1, "全部业务功能，无系统管理权限", now);
 
         Long adminId = jdbcTemplate.queryForObject(
                 "select id from sys_role where code = 'ADMIN'", Long.class);
@@ -77,7 +78,8 @@ public class DataInitializer implements ApplicationRunner {
 
     private void insertConfig(String key, String value, String remark, String now) {
         jdbcTemplate.update(
-                "insert or ignore into sys_config (config_key, config_value, remark, updated_at) values (?,?,?,?)",
+                dialect.insertIgnore("sys_config", "(config_key, config_value, remark, updated_at)")
+                        + " values (?,?,?,?)",
                 key, value, remark, now);
     }
 }

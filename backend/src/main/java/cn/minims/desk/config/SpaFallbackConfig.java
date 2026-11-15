@@ -18,8 +18,10 @@ public class SpaFallbackConfig implements WebMvcConfigurer {
 
     private static final String[] SPA_ROUTES = {
             "/login", "/register", "/403", "/todo", "/calendar", "/note",
+            "/bookmark", "/drive",
             "/reminders", "/search", "/stats", "/profile", "/settings",
             "/console", "/console/**",
+            "/share", "/share/**",
             "/work", "/work/**", "/study", "/study/**", "/life", "/life/**",
     };
 

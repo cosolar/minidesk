@@ -64,11 +64,16 @@ const implementedRoutes: RouteRecordRaw[] = [
     meta: { title: '资产' },
   },
   {
-    path: '/work/tool',
-    name: 'work-tool',
-    component: () => import('@/features/common/navlink/views/NavLinkView.vue'),
-    props: { module: 'work' },
+    path: '/bookmark',
+    name: 'bookmark',
+    component: () => import('@/features/bookmark/views/BookmarkView.vue'),
     meta: { title: '书签' },
+  },
+  {
+    path: '/drive',
+    name: 'drive',
+    component: () => import('@/features/drive/views/DriveView.vue'),
+    meta: { title: '网盘' },
   },
   {
     path: '/work/meeting',
@@ -130,12 +135,6 @@ const implementedRoutes: RouteRecordRaw[] = [
     name: 'life-contact',
     component: () => import('@/features/life/contact/views/ContactView.vue'),
     meta: { title: '联系人' },
-  },
-  {
-    path: '/profile',
-    name: 'profile',
-    component: () => import('@/features/profile/views/ProfileView.vue'),
-    meta: { title: '个人中心' },
   },
   {
     path: '/profile',

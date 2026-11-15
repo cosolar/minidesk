@@ -28,6 +28,8 @@ export interface KbBook {
   orgSlug: string
   description: string
   visibility: string
+  /** 发布态口径：true = 已加密或需要授权，false = 站点公开可读 */
+  encrypted: boolean
   docCount: number
   tags: string[]
   updatedText: string

@@ -111,8 +111,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  width: 100%;
   padding-top: 8px;
-  max-width: 920px;
 }
 
 .page-head {

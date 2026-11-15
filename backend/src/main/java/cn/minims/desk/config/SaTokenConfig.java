@@ -27,7 +27,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
             "/api/site/branding/*",
             "/api/share/note/**",
             "/api/ping",
-            "/api/files/*/raw"
+            "/api/files/*/raw",
+            "/api/drive/files/*/raw"
     };
 
     /**

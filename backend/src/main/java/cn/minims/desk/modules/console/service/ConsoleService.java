@@ -5,6 +5,7 @@ import cn.hutool.crypto.digest.BCrypt;
 import cn.minims.desk.common.api.ErrorCode;
 import cn.minims.desk.common.api.PageResult;
 import cn.minims.desk.common.exception.BizException;
+import cn.minims.desk.framework.db.DbDialect;
 import cn.minims.desk.framework.tenant.TenantContext;
 import cn.minims.desk.modules.console.vo.ConsoleVO;
 import java.io.IOException;
@@ -37,17 +38,20 @@ public class ConsoleService {
     private static final DateTimeFormatter DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final JdbcTemplate jdbc;
+    private final DbDialect dialect;
 
     @Value("${minidesk.data-dir:./data}")
     private String dataDir;
 
-    public ConsoleService(JdbcTemplate jdbc) {
+    public ConsoleService(JdbcTemplate jdbc, DbDialect dialect) {
         this.jdbc = jdbc;
+        this.dialect = dialect;
     }
 
     public ConsoleVO.Dashboard dashboard() {
         long totalUsers = count("select count(*) from sys_user where deleted = 0");
-        long active7d = count("select count(*) from sys_user where deleted = 0 and last_login_at >= datetime('now','-7 days')");
+        long active7d = count("select count(*) from sys_user where deleted = 0 and last_login_at >= "
+                + dialect.daysAgo(7));
         long disabled = count("select count(*) from sys_user where deleted = 0 and status = 0");
         long tasks = count("select count(*) from task where deleted = 0");
         long notes = count("select count(*) from note where deleted = 0");
@@ -56,11 +60,18 @@ public class ConsoleService {
 
         double dbSizeMb = 0;
         try {
-            Path db = Path.of(dataDir, "minidesk.db");
-            if (Files.exists(db)) {
-                dbSizeMb = Math.round(Files.size(db) / 1024.0 / 102.4) / 10.0;
+            String sizeSql = dialect.databaseSizeMbSql();
+            if (sizeSql != null) {
+                Double size = jdbc.queryForObject(sizeSql, Double.class);
+                dbSizeMb = size == null ? 0 : size;
+            } else {
+                // SQLite：主库就是数据目录里的单个文件
+                Path db = Path.of(dataDir, "minidesk.db");
+                if (Files.exists(db)) {
+                    dbSizeMb = Math.round(Files.size(db) / 1024.0 / 102.4) / 10.0;
+                }
             }
-        } catch (IOException ex) {
+        } catch (IOException | RuntimeException ex) {
             log.warn("read db size failed", ex);
         }
 

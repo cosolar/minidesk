@@ -10,17 +10,17 @@
 
 MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活三大板块 + 首页看板。当前交付形态是 **Web（PC 优先，窄屏有专属底部导航）**，也能打成内置前端的单 Jar；Tauri 桌面端仍在路线图中。另有一套**独立的管理后台**（`/console`，管理员登录直达，界面与用户端不同）。
 
-**当前状态**（2026-11-13，v0.1.0+）：统一入口 3 个、板块页 14 个、隐藏入口 4 个、管理后台 1 套；五套主题、60 张表、三套建表 SQL；Quartz 调度、备份恢复、审计 AOP、单 Jar 与移动端 TabBar 已落地，开源文档已补齐。
+**当前状态**（2026-11-15，v0.2.0）：统一入口 5 个、板块页 13 个、隐藏入口 3 个、管理后台 1 套；五套主题、64 张表、三套建表 SQL；Quartz 调度、备份恢复、审计 AOP、单 Jar、移动端 TabBar、网站导航与网盘、SQLite / MySQL 双运行时已落地，开源文档已补齐。
 
 > 开源交付说明见 [README.md](README.md)、[docs/README.md](docs/README.md) 与 [CHANGELOG.md](CHANGELOG.md)。设计总纲里标注「规划」「排期」「待确认」的章节不代表已实现。
 
-- ✅ 侧栏统一入口：待办 `/todo`、日历 `/calendar`、笔记 `/note`
+- ✅ 侧栏统一入口：待办 `/todo`、日历 `/calendar`、笔记 `/note`、书签 `/bookmark`、网盘 `/drive`
 - ✅ 隐藏入口（不进侧栏，导航即入口）
   - 提醒中心 `/reminders` ← 顶栏铃铛
   - 全局搜索 `/search` ← 顶栏搜索框 / Ctrl+K
   - 数据统计 `/stats` ← 工作台「数据概览」下钻
 - ✅ 工作台 `/`：Hero + 快速入口 + 三张模块卡 + 四个组件 + **数据概览**（效率/学习/收支）
-- ✅ 工作：项目、日志、资产、书签、会议纪要
+- ✅ 工作：项目、日志、资产、会议纪要（旧「书签」已上移为统一入口，`/work/tool` 保留重定向）
 - ✅ 学习：知识库、计划、打卡、资源
 - ✅ 生活：记账、纪念日、日记、相册、联系人
 - ✅ 管理后台 `/console`：用户、站点配置、**品牌设置**（站点名 + 方形/横版 logo）、**发件邮箱（SMTP）**、审计
@@ -33,7 +33,10 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 - ✅ 单 Jar：`mvn -Psingle-jar package` / `scripts/build_single_jar.py`，`SpaFallbackConfig` 条件化转发前端路由
 - ✅ Docker：根 `Dockerfile` 多阶段单镜像、`deploy/` 入口与 compose、GitHub Actions 打 `v*` tag 发布 Docker Hub
 - ✅ 移动端：底部 5 项 TabBar，顶栏精简；后台侧栏窄屏转横向菜单
-- ⏳ 待做：Tauri、MySQL / PostgreSQL 运行时适配、自动化测试、逐页深度重设计、集群调度
+- ✅ 书签 `/bookmark`：分类 / 站点 CRUD、搜索、置顶、拖拽排序、点击统计、一键导入常用站点；`SchemaUpgrade` 迁移旧 `nav_link(module='work')`
+- ✅ 网盘 `/drive`：目录、上传 / 预览 / 下载 / 重命名 / 删除，本地磁盘与 S3 兼容对象存储（纯 JDK SigV4）双后端，SecretKey 加密落库
+- ✅ 数据库：SQLite（默认）与 MySQL 8（生产）运行时双支持；`DbDialect` 按 JDBC 元数据判方言，逻辑备份 / 恢复与 `scripts/migrate_sqlite_to_mysql.py` 旧库迁移已落地
+- ⏳ 待做：Tauri、PostgreSQL 运行时适配、自动化测试、逐页深度重设计、集群调度
 
 > **信息架构铁律**：同一个概念只能有一个入口。
 > 任务、日历、笔记天然跨板块，就做统一入口；不要因为「工作上常用」就在工作分组里再放一份。
@@ -48,7 +51,7 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 |---|---|---|
 | 1 | `README.md` / `docs/README.md` | 项目现状、文档索引、快速开始 |
 | 2 | `docs/MiniDesk开发文档.md` | 产品范围、功能矩阵、架构决策、排期 |
-| 3 | `docs/数据库设计.md` | 60 张表、字段、索引、三库策略 |
+| 3 | `docs/数据库设计.md` | 64 张表、字段、索引、三库策略 |
 | 4 | `docs/接口清单.md` | 接口契约、错误码、权限码 |
 | 5 | `docs/部署指南.md` | 本地开发、生产部署、备份与 FAQ |
 | 6 | 本文件 | 编码规范、工作流、验收标准 |
@@ -71,9 +74,9 @@ MiniDesk 是一个本地优先的个人数字中枢：工作 / 学习 / 生活�
 后端  JDK 17 · Spring Boot 3.5 · Spring Web / Validation / Cache / Mail
       MyBatis-Plus 3.5（含 jsqlparser） · Sa-Token 1.46（JWT 无状态）
       Quartz 2.5（自建 Scheduler，已排除 Boot 自动配置） · AspectJ（审计切面）
-      SQLite JDBC · Caffeine · Hutool · Lombok · jjwt
+      SQLite JDBC · MySQL Connector/J · Caffeine · Hutool · Lombok · jjwt
 
-数据  SQLite（运行时唯一数据源）；MySQL 8 / PostgreSQL 14 仅提供建表 SQL
+数据  SQLite（默认）与 MySQL 8（生产）运行时双支持，方言由 DbDialect 自动判定；PostgreSQL 14 仅提供建表 SQL
 目录  frontend/ 与 backend/，后端包根 cn.minims.desk
 ```
 
@@ -86,7 +89,9 @@ minidesk/
 │  └─ src/{app,core,layouts,features,shared,styles,types}
 ├─ backend/               后端
 │  ├─ src/main/java/cn/minims/desk/{common,config,framework,bootstrap,modules}
-│  │  └─ modules/integration/minidocs/  知识库代理 client / service / controller / vo / config
+│  │  ├─ modules/integration/minidocs/  知识库代理 client / service / controller / vo / config
+│  │  ├─ modules/common/bookmark/       网站导航：分类 / 站点 / overview 快照
+│  │  └─ modules/drive/                 网盘：config / storage（SigV4）/ service / controller
 │  ├─ src/main/resources/db/  三套建表 SQL
 │  └─ data/              运行时数据（不入库）
 ├─ scripts/                gen_schema.py（三库 DDL 同步）、build_single_jar.py、smoke_test.py
@@ -139,12 +144,16 @@ docker compose -f deploy/docker-compose.yml up -d
 |---|---|---|
 | `SA_TOKEN_SECRET` | 生产必填 | JWT 签名密钥，≥ 32 字符；开发有默认值，生产必须替换 |
 | `MINIDESK_CLAIM_TOKEN` | 公网必填 | 首个注册者领取 ADMIN 时需填写的令牌，留空表示不校验 |
-| `SPRING_DATASOURCE_URL` | 否 | 默认 `jdbc:sqlite:${minidesk.data-dir}/minidesk.db`；显式设置会与数据目录分叉，Docker 部署勿设 |
+| `SPRING_DATASOURCE_URL` | 否 | 默认 `jdbc:sqlite:${minidesk.data-dir}/minidesk.db`；MySQL 时换成 `jdbc:mysql://…`（Docker 用 `MINIDESK_DB_URL` 注入） |
+| `SPRING_DATASOURCE_DRIVER_CLASS_NAME` | 否 | 默认 `org.sqlite.JDBC`；MySQL 时 `com.mysql.cj.jdbc.Driver` |
+| `SPRING_SQL_INIT_SCHEMA_LOCATIONS` | 否 | 默认 `classpath:db/schema-sqlite.sql`；MySQL 时 `classpath:db/schema-mysql.sql` |
+| `MINIDESK_DB_INIT_SQL` | 否 | 默认 `PRAGMA journal_mode=WAL;`；MySQL 时 `SET NAMES utf8mb4` |
+| `MINIDESK_DB_POOL_SIZE` | 否 | Hikari 连接池上限，默认 8，MySQL 建议 12 |
 | `MINIDESK_DATA_DIR` | 否 | 数据目录，默认 `./data`；主库与 `RestoreBootstrap` 都读它 |
 | `MINIDESK_MINIDOCS_TOKEN` | 否 | 知识库 `mdt_` 令牌；仅在首次启动、且尚无任何用户配置过时加密导入 |
 | `VITE_API_BASE` | 否 | 前端构建期接口前缀，默认 `/api`；`VITE_*` 禁止放密钥 |
 
-天气 Key、知识库访问令牌、SMTP 凭据、站点品牌**存数据库**（加密 / 掩码），不是环境变量；
+知识库访问令牌、SMTP 凭据、站点品牌**存数据库**（加密 / 掩码），不是环境变量；天气用免费公开数据源，不需要 Key，优先级由 `MINIDESK_WEATHER_PROVIDERS` 控制；
 `MINIDESK_MINIDOCS_TOKEN` 只是首次导入入口，导入后同样落库。集成加密主密钥首次启动自动
 生成到 `backend/data/.secret`，务必随库一起备份。清单见 [`.env.example`](.env.example)。
 
@@ -581,8 +590,11 @@ feat(work): link tasks to projects and calendar
 |---|---|
 | Sa-Token JWT | `sa-token-jwt` **不是自动装配**，必须自己注册 `@Bean StpLogic = new StpLogicJwtForStateless()`，否则 token 仍是 UUID |
 | JWT 无状态语义 | 服务端无法强制下线（logout 只是清客户端），个人工具可接受；需要踢人时换 `StpLogicJwtForSimple` + 持久化 DAO |
-| SQLite 时间字段 | JDBC 对 `java.time` 支持不全，用 `SqliteLocalDateTimeTypeHandler` / `SqliteLocalDateTypeHandler` 存 TEXT（`yyyy-MM-dd HH:mm:ss`），字典序即时间序 |
-| 建表 | 当前由 `spring.sql.init` 执行 `db/schema-sqlite.sql`；改完运行 `python scripts/gen_schema.py` 重新生成 `schema-mysql.sql` / `schema-postgresql.sql`（仅标准库依赖），并同步 `docs/数据库设计.md`；Liquibase 尚未接入 |
+| 时间字段 | JDBC 对 `java.time` 支持不全，统一用 `SqliteLocalDateTimeTypeHandler` / `SqliteLocalDateTypeHandler` 以 TEXT 存 `yyyy-MM-dd HH:mm:ss` / `yyyy-MM-dd`，字典序即时间序；MySQL 的 DATETIME / DATE 接受同一格式，读取时兼容小数秒 |
+| 建表 | `spring.sql.init` 执行 `SPRING_SQL_INIT_SCHEMA_LOCATIONS` 指定的脚本（默认 `db/schema-sqlite.sql`，MySQL 为 `db/schema-mysql.sql`）；改完运行 `python scripts/gen_schema.py` 重新生成三套 DDL，并同步 `docs/数据库设计.md`；Liquibase 尚未接入 |
+| 方言 | 不要在业务代码里写死 `insert or ignore` / `date('now')` / `||`；用 `DbDialect` 的 `insertIgnore` / `daysAgo` / `today` / `concat` / `quote`，分页方言也由它给出 |
+| MySQL 幂等种子 | `INSERT IGNORE` 依赖唯一键（`sys_role.code`、`sys_config.config_key`、`sys_schedule_job.job_code`），新增种子表时务必带唯一键，否则每次启动都会重复插入 |
+| MySQL 逻辑备份 | `VACUUM INTO` 是 SQLite 专属；MySQL 走 `LogicalDatabaseBackup` 导出 `database.jsonl`，恢复时用元数据白名单 + PreparedStatement 批写，整体事务回滚 |
 | 租户插件与登录 | 登录/注册/定时任务没有登录态，DB 访问必须 `TenantContext.ignore(...)`，否则 `getTenantId()` 抛异常 |
 | 前端端口 | 5173 被占用，固定 5180；`vite preview` 不继承 dev 的 proxy，必须单独配 `preview.proxy` |
 | 本机 Vite dev | 沙箱会拦截 Vite 清理 `node_modules/.vite/deps_temp_*`（批量删除保护），本机用 `npm run preview` 验证；用户自己的终端 `npm run dev` 正常 |

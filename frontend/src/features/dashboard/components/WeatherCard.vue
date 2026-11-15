@@ -7,6 +7,8 @@ interface Props {
   text?: string
   city?: string
   isMock?: boolean
+  /** cma / open-meteo / mock */
+  source?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -14,13 +16,26 @@ const props = withDefaults(defineProps<Props>(), {
   text: '晴',
   city: '东京',
   isMock: true,
+  source: 'mock',
 })
 
-const summary = computed(() => `${props.temp}℃ ${props.text} · ${props.city}`)
+const SOURCE_LABEL: Record<string, string> = {
+  cma: '中国天气网',
+  'open-meteo': 'Open-Meteo',
+  mock: '模拟数据',
+}
+
+const sourceLabel = computed(() => SOURCE_LABEL[props.source] ?? props.source)
+const hint = computed(() =>
+  props.isMock
+    ? '免费天气源暂时不可用，当前为模拟数据'
+    : `数据来源：${sourceLabel.value}（免费公开接口，无需 API Key）`,
+)
+const summary = computed(() => `${props.temp}℃ ${props.text} · ${props.city} · ${sourceLabel.value}`)
 </script>
 
 <template>
-  <div class="weather" role="status">
+  <div class="weather" role="status" :title="hint">
     <svg class="weather__icon" viewBox="0 0 32 32" width="18" height="18" aria-hidden="true">
       <circle cx="16" cy="16" r="6.6" fill="#FFC85C" />
       <g stroke="#FFC85C" stroke-width="1.7" stroke-linecap="round">
@@ -32,7 +47,7 @@ const summary = computed(() => `${props.temp}℃ ${props.text} · ${props.city}`
     <span class="weather__sep" aria-hidden="true">·</span>
     <el-icon class="weather__pin"><Location /></el-icon>
     <span class="weather__city">{{ city }}</span>
-    <span v-if="isMock" class="weather__badge" title="未配置和风天气 Key，当前为模拟数据">模拟</span>
+    <span v-if="isMock" class="weather__badge">模拟</span>
     <span class="sr-only">{{ summary }}</span>
   </div>
 </template>

@@ -107,9 +107,16 @@ public class SettingsService {
     public SettingsVO.TestResult testWeather(String city) {
         WeatherVO weather = weatherService.refresh(city);
         if (weather.isMock()) {
-            return new SettingsVO.TestResult(false, "未配置有效 Key 或请求失败，当前为模拟数据", weather.temp(), weather.text());
+            return new SettingsVO.TestResult(
+                    false, "免费天气源暂时不可用，当前展示模拟数据", weather.temp(), weather.text(), weather.source());
         }
-        return new SettingsVO.TestResult(true, "连接成功", weather.temp(), weather.text());
+        String label = switch (weather.source()) {
+            case "cma" -> "中国天气网";
+            case "open-meteo" -> "Open-Meteo";
+            default -> weather.source();
+        };
+        String message = "连接成功 · " + label + (weather.stale() ? "（缓存结果）" : "");
+        return new SettingsVO.TestResult(true, message, weather.temp(), weather.text(), weather.source());
     }
 
     private SysUserSettingDO requireSetting() {

@@ -125,7 +125,7 @@ function resetOperPage(): void {
       </el-tab-pane>
 
       <el-tab-pane label="登录日志" name="login">
-        <el-table :data="loginQuery.data.value?.list ?? []" height="calc(100vh - 240px)" class="table">
+        <el-table :data="loginQuery.data.value?.list ?? []" class="table">
           <el-table-column prop="username" label="账号" width="140" />
           <el-table-column label="结果" width="90">
             <template #default="{ row }">
@@ -156,7 +156,7 @@ function resetOperPage(): void {
           </el-select>
           <el-button :icon="Refresh" @click="operQuery.refetch()">刷新</el-button>
         </div>
-        <el-table :data="operQuery.data.value?.list ?? []" height="calc(100vh - 330px)" class="table">
+        <el-table :data="operQuery.data.value?.list ?? []" class="table">
           <el-table-column prop="username" label="操作人" width="120" />
           <el-table-column prop="module" label="模块" width="150" />
           <el-table-column prop="action" label="动作" width="150" />

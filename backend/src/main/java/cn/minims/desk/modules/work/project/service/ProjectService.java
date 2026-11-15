@@ -7,6 +7,7 @@ import cn.minims.desk.modules.work.project.entity.ProjectDO;
 import cn.minims.desk.modules.work.project.mapper.ProjectMapper;
 import cn.minims.desk.modules.work.project.vo.ProjectVO;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -57,7 +58,7 @@ public class ProjectService {
             long total = perStatus[0];
             long done = perStatus[1];
             int progress = total == 0 ? 0 : (int) Math.round(done * 100.0 / total);
-            long overdue = projectMapper.countOverdue(project.getId());
+            long overdue = projectMapper.countOverdue(project.getId(), LocalDate.now());
             return new ProjectVO(
                     String.valueOf(project.getId()),
                     project.getName(),
@@ -100,7 +101,7 @@ public class ProjectService {
                 project.getStartDate(),
                 project.getEndDate(),
                 progress,
-                new ProjectVO.Stats(total, done, doing, projectMapper.countOverdue(id)));
+                new ProjectVO.Stats(total, done, doing, projectMapper.countOverdue(id, LocalDate.now())));
     }
 
     @Transactional(rollbackFor = Exception.class)

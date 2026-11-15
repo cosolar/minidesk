@@ -264,10 +264,31 @@ public class MiniDocsService {
                 slug, orgSlug,
                 node.path("description").asText(""),
                 node.path("visibility").asText(""),
+                isEncrypted(node),
                 node.path("docCount").asInt(0),
                 tags,
                 node.path("updatedText").asText(""),
                 cover, scope, url);
+    }
+
+    /**
+     * 公开 / 加密以发布态（shareStatus）为准，而不是 scope 或 visibility。
+     *
+     * <p>MiniDocs 的发布态三档：public 已发布共享 / private 已发布加密 / unpublished 未发布，
+     * 与 visibility 正交（org、private 库也可能通过公开分享发布）。未发布或字段缺失时
+     * 只有明确 visibility=public 才算公开，其余一律按加密处理，避免把受限库放到公开列表。</p>
+     */
+    private static boolean isEncrypted(JsonNode node) {
+        String shareStatus = node.path("shareStatus").asText("").toLowerCase(Locale.ROOT);
+        if ("public".equals(shareStatus)) {
+            return false;
+        }
+        // private = 已发布加密，unpublished = 未发布仅自己可见，两者都不属于公开
+        if ("private".equals(shareStatus) || "unpublished".equals(shareStatus)) {
+            return true;
+        }
+        // 旧版上游没有发布态字段时，按可见性兜底：脏值与 org/private 一律按最严处理
+        return !"public".equalsIgnoreCase(node.path("visibility").asText(""));
     }
 
     private List<MiniDocsVO.DocNode> toNodes(JsonNode array) {

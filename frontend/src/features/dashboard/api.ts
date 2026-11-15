@@ -22,7 +22,7 @@ export interface StudyWeek {
 }
 
 export interface DashboardSummary {
-  weather: { temp: number; text: string; city: string; isMock: boolean } | null
+  weather: { temp: number; text: string; city: string; isMock: boolean; source: string } | null
   todo: { total: number; done: number; items: TaskVO[] }
   study: StudyWeek | null
   lifeLogs: Array<{ id: string; title: string; date: string; cover: string | null; mood: string | null }>

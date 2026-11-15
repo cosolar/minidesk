@@ -1,14 +1,21 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  Briefcase,
+  Clock,
+  Coffee,
+  Collection,
   CopyDocument,
   Delete,
   Document,
   EditPen,
+  Memo,
+  Notebook,
   Plus,
+  Reading,
   Search,
   Share,
   Star,
@@ -21,7 +28,7 @@ import MarkdownEditor from '@/shared/components/MarkdownEditor.vue'
 import MarkdownPreview, { type MarkdownHeading } from '@/shared/components/MarkdownPreview.vue'
 import { useAppStore } from '@/core/stores/app'
 import { noteApi, type NoteShare, type NoteSharePayload, type NoteSummary } from '../api'
-import { lifeLogApi } from '@/features/life/lifelog/api'
+import { lifeLogApi, type LifeLog } from '@/features/life/lifelog/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -53,10 +60,10 @@ const editorMode = computed<'ir' | 'sv'>(() =>
 
 /** 统一笔记：工作记录 / 学习笔记 / 生活日记，日记读的是 life_log */
 const TABS = [
-  { key: 'all', label: '全部' },
-  { key: 'work', label: '工作记录' },
-  { key: 'study', label: '学习笔记' },
-  { key: 'diary', label: '生活日记' },
+  { key: 'all', label: '全部笔记', short: '全部', icon: Collection, tone: 'all' },
+  { key: 'work', label: '工作记录', short: '工作', icon: Briefcase, tone: 'work' },
+  { key: 'study', label: '学习笔记', short: '学习', icon: Reading, tone: 'study' },
+  { key: 'diary', label: '生活日记', short: '日记', icon: Coffee, tone: 'life' },
 ] as const
 
 const MODULE_LABEL: Record<string, string> = {
@@ -64,6 +71,15 @@ const MODULE_LABEL: Record<string, string> = {
   study: '学习笔记',
   life: '生活日记',
 }
+
+/** 分类语义色与图标：侧栏筛选卡、列表卡片共用 */
+const MODULE_META: Record<string, { label: string; icon: Component; tone: string }> = {
+  work: { label: '工作记录', icon: Briefcase, tone: 'work' },
+  study: { label: '学习笔记', icon: Reading, tone: 'study' },
+  life: { label: '生活日记', icon: Coffee, tone: 'life' },
+}
+
+const DEFAULT_META = { label: '笔记', icon: Document, tone: 'all' }
 
 type TabKey = (typeof TABS)[number]['key']
 
@@ -76,11 +92,18 @@ const moduleFilter = computed(() =>
 const diaryQuery = useQuery({
   queryKey: ['note-diaries'],
   queryFn: () => lifeLogApi.page(undefined, 1, 100),
-  enabled: isDiary,
   staleTime: 10_000,
 })
 
+/** 不过滤的全量列表：只用于侧栏分类计数与累计字数，不参与搜索 */
+const overviewQuery = useQuery({
+  queryKey: ['notes-overview'],
+  queryFn: () => noteApi.page({ size: 100 }),
+  staleTime: 30_000,
+})
+
 const diaries = computed(() => diaryQuery.data.value?.list ?? [])
+const overviewNotes = computed(() => overviewQuery.data.value?.list ?? [])
 
 const listQuery = useQuery({
   queryKey: ['notes', moduleFilter, keyword],
@@ -92,6 +115,68 @@ const listQuery = useQuery({
 
 const notes = computed(() => listQuery.data.value?.list ?? [])
 const sideCount = computed(() => (isDiary.value ? diaries.value.length : notes.value.length))
+const totalWords = computed(() =>
+  overviewNotes.value.reduce((sum, note) => sum + (note.wordCount ?? 0), 0),
+)
+
+type NoteGroup = { label: string; items: NoteSummary[] }
+type DiaryGroup = { label: string; items: LifeLog[] }
+
+/** 侧栏按「置顶 / 最近 7 天 / 更早」分段，笔记少时也不会散成一列 */
+const groupedNotes = computed<NoteGroup[]>(() => {
+  const pinned = notes.value.filter((note) => note.pinned)
+  const rest = notes.value.filter((note) => !note.pinned)
+  const weekAgo = dayjs().subtract(7, 'day')
+  const recent = rest.filter((note) => dayjs(note.updatedAt).isAfter(weekAgo))
+  const older = rest.filter((note) => !dayjs(note.updatedAt).isAfter(weekAgo))
+  const groups: NoteGroup[] = []
+  if (pinned.length) groups.push({ label: '置顶', items: pinned })
+  if (recent.length) groups.push({ label: '最近 7 天', items: recent })
+  if (older.length) groups.push({ label: '更早', items: older })
+  return groups
+})
+
+const diaryGroups = computed<DiaryGroup[]>(() => {
+  const groups = new Map<string, LifeLog[]>()
+  diaries.value.forEach((item) => {
+    const label = dayjs(item.logDate).isValid()
+      ? dayjs(item.logDate).format('YYYY 年 M 月')
+      : '生活日记'
+    const bucket = groups.get(label) ?? []
+    bucket.push(item)
+    groups.set(label, bucket)
+  })
+  return Array.from(groups, ([label, items]) => ({ label, items }))
+})
+
+function tabCount(key: TabKey): number {
+  if (key === 'all') return overviewNotes.value.length
+  if (key === 'diary') return diaries.value.length
+  return overviewNotes.value.filter((note) => note.module === key).length
+}
+
+function noteMeta(note: NoteSummary) {
+  return MODULE_META[note.module] ?? DEFAULT_META
+}
+
+function formatWords(count: number): string {
+  return `${(count ?? 0).toLocaleString('zh-CN')} 字`
+}
+
+/** 日记列表接口带正文，前端裁一段纯文本摘要给卡片用 */
+function excerptOf(content: string | null, title: string): string {
+  if (!content?.trim()) return ''
+  const text = content
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+.*$/gm, ' ')
+    .replace(/[`*_~|>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const cleaned = title && text.startsWith(title) ? text.slice(title.length).trim() : text
+  return cleaned.length > 84 ? `${cleaned.slice(0, 84)}…` : cleaned
+}
 
 const draft = reactive({
   title: '',
@@ -443,93 +528,173 @@ async function cancelShare(): Promise<void> {
 <template>
   <div class="notes-page">
     <aside class="note-side">
-      <header class="note-side__head">
-        <div class="note-side__title">
-          笔记
-          <span class="note-side__count">{{ sideCount }}</span>
+      <div class="note-side__top">
+        <header class="note-side__head">
+          <div class="note-side__brand">
+            <span class="note-side__mark"><el-icon><Notebook /></el-icon></span>
+            <span class="note-side__heading">
+              <strong>笔记</strong>
+              <small>{{ overviewNotes.length }} 篇 · {{ formatWords(totalWords) }}</small>
+            </span>
+          </div>
+          <el-tooltip :content="isDiary ? '去写日记' : '新建笔记'" placement="left">
+            <button type="button" class="note-create" aria-label="新建" @click="onCreate">
+              <el-icon><Plus /></el-icon>
+            </button>
+          </el-tooltip>
+        </header>
+
+        <div class="note-filters" role="tablist" aria-label="笔记分类">
+          <button
+            v-for="tab in TABS"
+            :key="tab.key"
+            type="button"
+            role="tab"
+            class="note-filter"
+            :class="[`is-${tab.tone}`, { 'is-active': activeTab === tab.key }]"
+            :aria-selected="activeTab === tab.key"
+            :title="tab.label"
+            @click="activeTab = tab.key"
+          >
+            <span class="note-filter__icon">
+              <el-icon><component :is="tab.icon" /></el-icon>
+            </span>
+            <span class="note-filter__label">{{ tab.short }}</span>
+            <span class="note-filter__count">{{ tabCount(tab.key) }}</span>
+          </button>
         </div>
-        <button type="button" class="icon-btn icon-btn--primary" aria-label="新建笔记" @click="onCreate">
-          <el-icon><Plus /></el-icon>
-        </button>
-      </header>
 
-      <div class="note-tabs">
-        <button
-          v-for="tab in TABS"
-          :key="tab.key"
-          type="button"
-          class="note-tabs__item"
-          :class="{ 'is-active': activeTab === tab.key }"
-          @click="activeTab = tab.key"
-        >
-          {{ tab.label }}
-        </button>
+        <div v-if="!isDiary" class="note-search">
+          <el-input
+            v-model="keyword"
+            :prefix-icon="Search"
+            placeholder="搜索标题或正文"
+            clearable
+            size="small"
+          />
+          <span v-if="keyword" class="note-search__result">{{ sideCount }} 条</span>
+        </div>
       </div>
-
-      <el-input
-        v-if="!isDiary"
-        v-model="keyword"
-        :prefix-icon="Search"
-        placeholder="搜索标题或正文"
-        clearable
-        size="small"
-        class="note-side__search"
-      />
 
       <div class="note-side__list">
-        <ul v-if="isDiary" class="note-items">
-          <li
-            v-for="item in diaries"
-            :key="item.id"
-            class="note-item"
-            @click="router.push('/life/diary')"
-          >
-            <div class="note-item__title">{{ item.title || '无标题' }}</div>
-            <div class="note-item__meta">
-              <span>{{ item.logDate }}</span>
-              <span>{{ item.mood || '记录' }}</span>
+        <template v-if="isDiary">
+          <template v-if="diaryGroups.length">
+            <div v-for="group in diaryGroups" :key="group.label" class="note-group">
+              <div class="note-group__label">
+                <span>{{ group.label }}</span><i /><em>{{ group.items.length }}</em>
+              </div>
+              <ul class="note-group__items">
+                <li
+                  v-for="item in group.items"
+                  :key="item.id"
+                  class="note-card is-life"
+                  @click="router.push('/life/diary')"
+                >
+                  <span class="note-card__rail" />
+                  <div class="note-card__head">
+                    <span class="note-card__icon"><el-icon><Memo /></el-icon></span>
+                    <span class="note-card__title">{{ item.title || '无标题' }}</span>
+                  </div>
+                  <p class="note-card__excerpt">
+                    {{ excerptOf(item.content, item.title) || '空白日记，点开写点什么…' }}
+                  </p>
+                  <div class="note-card__meta">
+                    <span class="note-card__time">{{ item.logDate }}</span>
+                    <span class="note-card__tag">{{ item.mood || '生活日记' }}</span>
+                  </div>
+                </li>
+              </ul>
             </div>
-          </li>
-          <li v-if="!diaries.length" class="note-side__empty">
-            <p>还没有日记，去「日记」写一篇</p>
-            <el-button size="small" @click="router.push('/life/diary')">去写日记</el-button>
-          </li>
-        </ul>
+          </template>
+          <div v-else class="note-empty">
+            <span class="note-empty__art"><el-icon><Coffee /></el-icon></span>
+            <strong>还没有日记</strong>
+            <p>记录今天的心情和小事，慢慢攒成生活档案。</p>
+            <el-button size="small" type="primary" :icon="EditPen" @click="router.push('/life/diary')">
+              去写日记
+            </el-button>
+          </div>
+        </template>
 
-        <el-skeleton v-else-if="listQuery.isLoading.value" :rows="6" animated />
+        <template v-else>
+          <div v-if="listQuery.isLoading.value" class="note-skeletons">
+            <div v-for="n in 3" :key="n" class="note-skeleton"><i /><i /><i /></div>
+          </div>
 
-        <ul v-else-if="notes.length" class="note-items">
-          <li
-            v-for="note in notes"
-            :key="note.id"
-            class="note-item"
-            :class="{ 'is-active': note.id === selectedId }"
-            @click="selectNote(note)"
-          >
-            <div class="note-item__title">
-              <el-icon v-if="note.pinned" class="note-item__pin"><StarFilled /></el-icon>
-              <span class="note-item__text">{{ note.title || '无标题' }}</span>
+          <template v-else-if="groupedNotes.length">
+            <div v-for="group in groupedNotes" :key="group.label" class="note-group">
+              <div class="note-group__label">
+                <span>{{ group.label }}</span><i /><em>{{ group.items.length }}</em>
+              </div>
+              <ul class="note-group__items">
+                <li
+                  v-for="note in group.items"
+                  :key="note.id"
+                  class="note-card"
+                  :class="[
+                    `is-${noteMeta(note).tone}`,
+                    { 'is-active': note.id === selectedId, 'is-pinned': note.pinned },
+                  ]"
+                  @click="selectNote(note)"
+                >
+                  <span class="note-card__rail" />
+                  <div class="note-card__head">
+                    <span class="note-card__icon">
+                      <el-icon><component :is="noteMeta(note).icon" /></el-icon>
+                    </span>
+                    <span class="note-card__title">{{ note.title || '无标题' }}</span>
+                  </div>
+                  <p class="note-card__excerpt">
+                    {{ note.excerpt || '空白笔记，点开写点什么…' }}
+                  </p>
+                  <div class="note-card__meta">
+                    <span v-if="note.pinned" class="note-card__pin"><el-icon><StarFilled /></el-icon></span>
+                    <span class="note-card__time"><el-icon><Clock /></el-icon>{{ relative(note.updatedAt) }}</span>
+                    <span class="note-card__tag">{{ noteMeta(note).label }}</span>
+                    <span class="note-card__words">{{ formatWords(note.wordCount) }}</span>
+                  </div>
+                  <button
+                    class="note-card__delete"
+                    type="button"
+                    aria-label="删除"
+                    @click.stop="removeNote(note)"
+                  >
+                    <el-icon><Delete /></el-icon>
+                  </button>
+                </li>
+              </ul>
             </div>
-            <div class="note-item__meta">
-              <span>{{ note.wordCount }} 字</span>
-              <span>{{ relative(note.updatedAt) }}</span>
-            </div>
-            <button
-              class="note-item__delete"
-              type="button"
-              aria-label="删除"
-              @click.stop="removeNote(note)"
+          </template>
+
+          <div v-else class="note-empty">
+            <span class="note-empty__art">
+              <el-icon><component :is="keyword ? Search : Memo" /></el-icon>
+            </span>
+            <strong>{{ keyword ? '没有找到匹配的笔记' : '这里还空空如也' }}</strong>
+            <p>{{ keyword ? '换个关键词试试，或清空搜索条件。' : '用 Markdown 写下第一个想法，自动保存不丢字。' }}</p>
+            <el-button
+              v-if="!keyword"
+              size="small"
+              type="primary"
+              :icon="Plus"
+              @click="createMutation.mutate()"
             >
-              <el-icon><Delete /></el-icon>
-            </button>
-          </li>
-        </ul>
-
-        <div v-else class="note-side__empty">
-          <p>还没有笔记</p>
-          <el-button size="small" @click="createMutation.mutate()">新建一篇</el-button>
-        </div>
+              新建一篇
+            </el-button>
+          </div>
+        </template>
       </div>
+
+      <footer class="note-side__foot">
+        <span class="note-side__foot-icon"><el-icon><EditPen /></el-icon></span>
+        <span class="note-side__foot-text">
+          <strong>随手记一笔</strong>
+          <small>Markdown 书写 · 自动保存</small>
+        </span>
+        <button type="button" class="note-side__foot-btn" aria-label="新建笔记" @click="onCreate">
+          <el-icon><Plus /></el-icon>
+        </button>
+      </footer>
     </aside>
 
     <section class="note-main">
@@ -754,18 +919,20 @@ async function cancelShare(): Promise<void> {
 </template>
 
 <style scoped lang="scss">
+// 正文左右留白：随视口缩放，但不再给内容区设固定版心
+$doc-gutter: clamp(20px, 3vw, 44px);
+
 .notes-page {
   display: grid;
-  grid-template-columns: 272px minmax(0, 1fr);
+  grid-template-columns: 292px minmax(0, 1fr);
+  // 高度完全交给外层内容区（grid 1fr）分配，两列各自内部滚动，
+  // 不再用 calc(100vh - Npx) 猜顶栏高度，底部就不会留空白。
   gap: 14px;
-  height: calc(100vh - 118px);
-  min-height: 560px;
-  padding-top: 8px;
+  min-height: 0;
 
   @include respond-below(md) {
     grid-template-columns: minmax(0, 1fr);
     gap: 10px;
-    height: auto;
     min-height: 0;
   }
 }
@@ -774,199 +941,633 @@ async function cancelShare(): Promise<void> {
 .note-side {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-height: 0;
-  padding: 14px 12px 10px;
   @include card($radius-xl);
   overflow: hidden;
 
   @include respond-below(md) {
-    max-height: 42vh;
+    max-height: 46vh;
   }
+}
+
+// 头部：品牌色晕染 + 图标徽章，和右侧文档区拉开层次
+.note-side__top {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 15px 14px 13px;
+  border-bottom: 1px solid var(--border-color);
+  background:
+    radial-gradient(
+      112% 92% at 0% 0%,
+      color-mix(in srgb, var(--brand-400) 15%, transparent),
+      transparent 68%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--brand-50) 55%, var(--bg-card)),
+      var(--bg-card)
+    );
 }
 
 .note-side__head {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 2px;
+  gap: 10px;
 }
 
-.note-side__title {
+.note-side__brand {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-family: var(--font-display);
-  font-size: 15px;
-  font-weight: 650;
-  color: var(--text-primary);
+  gap: 10px;
+  min-width: 0;
 }
 
-.note-side__count {
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--bg-subtle);
-  color: var(--text-tertiary);
-  font-size: 10.5px;
-  font-weight: 500;
+.note-side__mark {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, var(--brand-400), var(--brand-600));
+  color: var(--text-inverse);
+  font-size: 18px;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--brand-500) 28%, transparent);
 }
 
-.note-tabs {
+.note-side__heading {
   display: flex;
+  flex-direction: column;
   gap: 2px;
-  padding: 3px;
-  border-radius: 11px;
-  background: var(--bg-subtle);
-}
+  min-width: 0;
 
-.note-tabs__item {
-  flex: 1;
-  padding: 5px 2px;
-  border: none;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 11.5px;
-  cursor: pointer;
-  transition:
-    background $duration-fast $ease-out,
-    color $duration-fast $ease-out;
-
-  &:hover {
+  strong {
+    font-family: var(--font-display);
+    font-size: 15.5px;
+    font-weight: 700;
+    line-height: 1.2;
     color: var(--text-primary);
   }
 
-  &.is-active {
-    background: var(--bg-card);
-    color: var(--brand-700);
-    font-weight: 600;
-    box-shadow: var(--shadow-card);
+  small {
+    font-size: 10.5px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
   }
 }
 
-.note-side__search {
+.note-create {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 11px;
+  background: linear-gradient(145deg, var(--brand-500), var(--brand-700));
+  color: var(--text-inverse);
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--brand-500) 30%, transparent);
+  transition:
+    transform $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px color-mix(in srgb, var(--brand-500) 38%, transparent);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+// 分类筛选：2×2 彩色卡片，比原来的等分文字条更清晰
+.note-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.note-filter {
+  --tone: var(--brand-500);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-card) 82%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    border-color $duration-fast $ease-out,
+    background $duration-fast $ease-out;
+
+  &.is-work {
+    --tone: var(--c-work);
+  }
+
+  &.is-study {
+    --tone: var(--c-study);
+  }
+
+  &.is-life {
+    --tone: var(--c-life);
+  }
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--tone) 38%, var(--border-color));
+    background: var(--bg-card);
+  }
+
+  &.is-active {
+    border-color: color-mix(in srgb, var(--tone) 45%, var(--border-color));
+    background: color-mix(in srgb, var(--tone) 9%, var(--bg-card));
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 8%, transparent);
+
+    .note-filter__label {
+      color: var(--tone);
+      font-weight: 650;
+    }
+
+    .note-filter__count {
+      background: color-mix(in srgb, var(--tone) 12%, transparent);
+      color: var(--tone);
+    }
+  }
+
+  &__icon {
+    @include flex-center;
+    flex: 0 0 auto;
+    width: 19px;
+    height: 19px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--tone) 14%, transparent);
+    color: var(--tone);
+    font-size: 11px;
+  }
+
+  &__label {
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+
+  &__count {
+    min-width: 18px;
+    margin-left: auto;
+    padding: 1px 4px;
+    border-radius: 6px;
+    background: var(--bg-subtle);
+    color: var(--text-tertiary);
+    font-family: var(--font-number);
+    font-size: 10px;
+    text-align: center;
+  }
+}
+
+.note-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+
+  :deep(.el-input) {
+    flex: 1;
+    min-width: 0;
+  }
+
   :deep(.el-input__wrapper) {
     border-radius: 10px;
-    background: var(--bg-subtle);
-    box-shadow: none;
+    background: var(--bg-card);
+    box-shadow: 0 0 0 1px var(--border-color) inset;
+    transition: box-shadow $duration-fast $ease-out;
+
+    &.is-focus {
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-400) 60%, var(--border-color)) inset;
+    }
+  }
+
+  &__result {
+    flex: 0 0 auto;
+    font-size: 10.5px;
+    color: var(--text-tertiary);
   }
 }
 
+// 列表：分组标题 + 卡片，卡片之间留白而不是挤成一行行文字
 .note-side__list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  margin: 0 -4px;
-  padding: 0 4px 4px;
+  padding: 12px 12px 14px;
+  @include scrollbar(6px);
 }
 
-.note-items {
+.note-group + .note-group {
+  margin-top: 14px;
+}
+
+.note-group__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 2px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+
+  i {
+    flex: 1;
+    height: 1px;
+    background: var(--border-color);
+  }
+
+  em {
+    font-style: normal;
+    font-family: var(--font-number);
+    font-weight: 500;
+  }
+}
+
+.note-group__items {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
 }
 
-.note-item {
+.note-card {
+  --tone: var(--brand-500);
   position: relative;
-  padding: 8px 26px 8px 11px;
-  border-radius: 10px;
+  padding: 10px 10px 9px 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
   cursor: pointer;
-  transition: background $duration-fast $ease-out;
+  overflow: hidden;
+  transition:
+    transform $duration-fast $ease-out,
+    border-color $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 9px;
-    bottom: 9px;
-    left: 0;
-    width: 2.5px;
-    border-radius: 2px;
-    background: var(--brand-400);
-    opacity: 0;
-    transition: opacity $duration-fast $ease-out;
+  &.is-work {
+    --tone: var(--c-work);
+  }
+
+  &.is-study {
+    --tone: var(--c-study);
+  }
+
+  &.is-life {
+    --tone: var(--c-life);
   }
 
   &:hover {
-    background: var(--bg-hover);
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--tone) 36%, var(--border-color));
+    box-shadow: var(--shadow-card);
 
-    .note-item__delete {
+    .note-card__delete {
       opacity: 1;
     }
   }
 
   &.is-active {
+    border-color: color-mix(in srgb, var(--brand-400) 52%, var(--border-color));
     background: linear-gradient(
-      100deg,
-      color-mix(in srgb, var(--brand-400) 17%, transparent),
-      color-mix(in srgb, var(--brand-400) 4%, transparent)
+      115deg,
+      color-mix(in srgb, var(--brand-400) 13%, var(--bg-card)),
+      var(--bg-card) 76%
     );
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-400) 20%, transparent);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-500) 12%, transparent);
 
-    &::before {
+    .note-card__title {
+      color: var(--brand-700);
+    }
+
+    .note-card__rail {
       opacity: 1;
       background: linear-gradient(180deg, var(--brand-400), var(--brand-600));
     }
+  }
 
-    .note-item__text {
-      color: var(--brand-700);
-      font-weight: 600;
+  &__rail {
+    position: absolute;
+    top: 11px;
+    bottom: 11px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--tone);
+    opacity: 0.65;
+  }
+
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-right: 20px;
+  }
+
+  &__icon {
+    @include flex-center;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    background: color-mix(in srgb, var(--tone) 13%, transparent);
+    color: var(--tone);
+    font-size: 12px;
+  }
+
+  &__title {
+    @include ellipsis(1);
+    min-width: 0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  &__excerpt {
+    @include ellipsis(2);
+    min-height: 30px;
+    margin: 7px 0 8px;
+    font-size: 10.8px;
+    line-height: 1.5;
+    color: var(--text-tertiary);
+  }
+
+  &__meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 10px;
+    color: var(--text-tertiary);
+  }
+
+  &__pin {
+    flex: 0 0 auto;
+    color: $c-warn;
+    font-size: 11px;
+  }
+
+  &__time {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex: 0 0 auto;
+
+    .el-icon {
+      font-size: 10px;
+    }
+  }
+
+  &__tag {
+    @include ellipsis(1);
+    max-width: 64px;
+    padding: 1.5px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--tone) 12%, transparent);
+    color: var(--tone);
+    font-size: 9.5px;
+  }
+
+  &__words {
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-family: var(--font-number);
+  }
+
+  &__delete {
+    @include flex-center;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+    color: var(--text-tertiary);
+    opacity: 0;
+    cursor: pointer;
+    transition:
+      opacity $duration-fast $ease-out,
+      color $duration-fast $ease-out,
+      background $duration-fast $ease-out;
+
+    &:hover {
+      background: var(--c-alert-bg);
+      color: var(--c-alert);
     }
   }
 }
 
-.note-item__title {
+.note-skeletons {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12.5px;
-  color: var(--text-primary);
-}
-
-.note-item__text {
-  @include ellipsis(1);
-}
-
-.note-item__pin {
-  flex: 0 0 auto;
-  color: $c-warn;
-  font-size: 11px;
-}
-
-.note-item__meta {
-  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin-top: 2px;
-  font-size: 10.5px;
-  color: var(--text-tertiary);
 }
 
-.note-item__delete {
-  position: absolute;
-  top: 7px;
-  right: 6px;
-  padding: 2px;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  opacity: 0;
-  cursor: pointer;
-  transition:
-    opacity $duration-fast $ease-out,
-    color $duration-fast $ease-out;
+.note-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-card);
 
-  &:hover {
-    color: var(--c-alert);
+  i {
+    display: block;
+    height: 9px;
+    border-radius: 5px;
+    background: linear-gradient(
+      90deg,
+      var(--bg-subtle) 25%,
+      var(--bg-hover) 50%,
+      var(--bg-subtle) 75%
+    );
+    background-size: 200% 100%;
+    animation: note-shimmer 1.4s ease infinite;
+  }
+
+  i:nth-child(1) {
+    width: 58%;
+    height: 12px;
+  }
+
+  i:nth-child(2) {
+    width: 100%;
+  }
+
+  i:nth-child(3) {
+    width: 42%;
   }
 }
 
-.note-side__empty {
+@keyframes note-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.note-empty {
   @include flex-center;
   flex-direction: column;
-  gap: 8px;
-  padding: 34px 12px;
-  color: var(--text-tertiary);
-  font-size: 12px;
+  gap: 7px;
+  margin-top: 18px;
+  padding: 26px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-subtle) 55%, transparent);
   text-align: center;
+
+  &__art {
+    @include flex-center;
+    width: 46px;
+    height: 46px;
+    margin-bottom: 4px;
+    border-radius: 15px;
+    background: color-mix(in srgb, var(--brand-400) 12%, var(--bg-card));
+    color: var(--brand-500);
+    font-size: 21px;
+  }
+
+  strong {
+    font-size: 12.5px;
+    color: var(--text-primary);
+  }
+
+  p {
+    max-width: 210px;
+    margin: 0 0 4px;
+    font-size: 11px;
+    line-height: 1.6;
+    color: var(--text-tertiary);
+  }
+}
+
+.note-side__foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+  padding: 10px 13px;
+  border-top: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-subtle) 65%, var(--bg-card));
+
+  &-icon {
+    @include flex-center;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--brand-400) 13%, transparent);
+    color: var(--brand-600);
+    font-size: 14px;
+  }
+
+  &-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+
+    strong {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    small {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+    }
+  }
+
+  &-btn {
+    @include flex-center;
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--bg-card);
+    color: var(--brand-600);
+    cursor: pointer;
+    transition:
+      transform $duration-fast $ease-out,
+      border-color $duration-fast $ease-out,
+      background $duration-fast $ease-out;
+
+    &:hover {
+      transform: translateY(-1px);
+      border-color: var(--brand-400);
+      background: var(--brand-50);
+    }
+  }
+}
+
+@include respond-below(md) {
+  .note-side__top {
+    padding: 10px 12px;
+  }
+
+  .note-side__mark {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    font-size: 15px;
+  }
+
+  .note-side__heading small,
+  .note-side__foot {
+    display: none;
+  }
+
+  .note-filters {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    overflow-x: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .note-filter {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+  }
+
+  .note-search {
+    margin-top: 8px;
+  }
+
+  .note-side__list {
+    padding: 10px;
+  }
+
+  .note-card__excerpt {
+    -webkit-line-clamp: 1;
+    min-height: 0;
+    margin: 5px 0 7px;
+  }
 }
 
 // ---------- 右侧文档 ----------
@@ -992,7 +1593,7 @@ async function cancelShare(): Promise<void> {
   justify-content: space-between;
   gap: 12px;
   flex: 0 0 auto;
-  padding: 10px 16px;
+  padding: 10px $doc-gutter;
   border-bottom: 1px solid var(--border-color);
   background: linear-gradient(
     180deg,
@@ -1195,14 +1796,19 @@ async function cancelShare(): Promise<void> {
 }
 
 .doc-scroll {
+  width: 100%;
   min-width: 0;
+  overflow-x: auto;
   overflow-y: auto;
 }
 
 .doc-article {
-  max-width: 788px;
-  margin: 0 auto;
-  padding: 30px 44px 72px;
+  // 正文占满右侧可用宽度，宽屏两侧不再留固定版心的空白
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 30px $doc-gutter 72px;
 
   @include respond-below(md) {
     padding: 22px 18px 56px;
@@ -1316,7 +1922,11 @@ async function cancelShare(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 16px 14px;
+  padding: 10px $doc-gutter 14px;
+
+  @include respond-below(md) {
+    padding: 10px 18px 14px;
+  }
 }
 
 .doc-edit__title {

@@ -18,7 +18,7 @@ python scripts/build_single_jar.py
 
 - **数据目录由 `MINIDESK_DATA_DIR` 决定**（默认 `./data`，相对启动工作目录）：主库、`.secret`、附件、备份与恢复包都在一起，启动时自动建目录。单 Jar 从任意目录启动建议传绝对路径。
 - 默认端口 `18080`，接口前缀 `/api`；显式传 `--server.port` 可避免环境变量 `PORT` 覆盖配置。
-- 启动时自动建表（`db/schema-sqlite.sql`）、补增量列（`SchemaUpgrade`）、写入角色权限与站点配置（`DataInitializer`），全部幂等。
+- 启动时自动建表（SQLite 用 `db/schema-sqlite.sql`，MySQL 用 `db/schema-mysql.sql`）、补增量列（`SchemaUpgrade`）、写入角色权限与站点配置（`DataInitializer`），全部幂等。
 
 ## 环境变量
 
@@ -26,12 +26,16 @@ python scripts/build_single_jar.py
 | --- | --- | --- |
 | `SA_TOKEN_SECRET` | `minidesk-dev-secret-please-override-in-prod` | JWT 签名密钥，生产必须替换 |
 | `MINIDESK_CLAIM_TOKEN` | 空 | 首个注册者领取 ADMIN 时需填写的令牌 |
-| `SPRING_DATASOURCE_URL` | `jdbc:sqlite:${minidesk.data-dir}/minidesk.db` | 数据源；显式设置会与数据目录分叉 |
+| `SPRING_DATASOURCE_URL` | `jdbc:sqlite:${minidesk.data-dir}/minidesk.db` | 数据源；MySQL 时换成 `jdbc:mysql://…` |
+| `SPRING_DATASOURCE_DRIVER_CLASS_NAME` | `org.sqlite.JDBC` | MySQL 时为 `com.mysql.cj.jdbc.Driver` |
+| `SPRING_SQL_INIT_SCHEMA_LOCATIONS` | `classpath:db/schema-sqlite.sql` | MySQL 时为 `classpath:db/schema-mysql.sql` |
+| `MINIDESK_DB_INIT_SQL` | `PRAGMA journal_mode=WAL;` | MySQL 时为 `SET NAMES utf8mb4` |
+| `MINIDESK_DB_POOL_SIZE` | `8` | Hikari 连接池上限 |
 | `SERVER_PORT` | `18080` | 建议改用命令行参数 |
-| `MINIDESK_DATA_DIR` | `./data` | 数据目录；主库与恢复引导都读它 |
+| `MINIDESK_DATA_DIR` | `./data` | 数据目录；SQLite 主库与恢复引导都读它 |
 | `MINIDESK_MINIDOCS_TOKEN` | 空 | 知识库 `mdt_` 令牌，仅首次启动且无既有配置时加密导入 |
 
-站点名称、Logo、SMTP、天气 Key、知识库访问令牌等运行时配置存数据库，在界面上修改，不写在配置文件里。清单见 [`.env.example`](../.env.example)。
+站点名称、Logo、SMTP、知识库访问令牌、网盘存储后端（本地 / S3）与密钥等运行时配置存数据库，在界面上修改，不写在配置文件里；天气数据源无需 Key，用 `MINIDESK_WEATHER_PROVIDERS` 调整优先级。清单见 [`.env.example`](../.env.example)。
 
 ## 目录
 
@@ -44,11 +48,11 @@ src/main/java/cn/minims/desk/
 ├── framework/
 │   ├── satoken/     # 权限码常量、StpInterfaceImpl
 │   ├── tenant/      # TenantContext、UserTenantHandler
-│   ├── db/          # SchemaUpgrade：幂等字段增量
+│   ├── db/          # DbDialect 方言、SchemaUpgrade 增量列、LogicalDatabaseBackup 逻辑备份
 │   ├── audit/       # @AuditLog 与 AuditAspect：写操作审计
 │   ├── spring/      # SpringContextHolder：Quartz Job 取回 Spring Bean
 │   ├── crypto/      # AesGcmCipher：集成 Key 加密
-│   └── mybatis/     # SQLite LocalDateTime TypeHandler 等
+│   └── mybatis/     # LocalDateTime / LocalDate TypeHandler（SQLite 与 MySQL 通用）
 ├── bootstrap/       # DataInitializer：角色、权限、站点配置种子数据
 ├── common/          # 跨模块能力：日历、搜索、提醒、导航链接等
 └── modules/
@@ -56,13 +60,15 @@ src/main/java/cn/minims/desk/
     ├── user/        # 个人中心、密码修改
     ├── console/     # 管理后台：用户、站点配置、品牌、邮件、日志
     ├── dashboard/   # 首页聚合
+    ├── common/bookmark/ # 网站导航：分类 / 站点 / overview 快照
+    ├── drive/       # 网盘：本地 + S3 兼容存储、AWS SigV4、配置加密
     ├── work/        # 任务、项目、日志、资产、会议
     ├── study/       # 计划、知识库等
     ├── life/        # 记账、习惯、纪念日、日记、相册、联系人
     ├── note/        # 笔记
     ├── stats/       # 数据统计
     ├── integration/ # 第三方集成
-    │   ├── weather/     # 和风天气（未配置自动 Mock）
+    │   ├── weather/     # 免费公开天气源（cma / open-meteo），失败自动 Mock
     │   └── minidocs/    # 知识库代理：client / service / controller / vo / config
     └── system/      # 文件上传、schedule（Quartz 任务）、backup（备份与恢复）
 ```
@@ -71,6 +77,12 @@ src/main/java/cn/minims/desk/
 `mine` 走带令牌的 `/console/{org}/...`，`public` 走匿名 `/portal/...`；令牌从
 `integration_config` 解密后只在内存中使用，正文实时读取不缓存，目录树缓存 5 分钟。
 接口契约见 [接口清单 §10](../docs/接口清单.md)。
+
+`modules/common/bookmark` 与 `modules/drive` 分别提供 `/api/bookmarks/*`（§19）与
+`/api/drive/*`（§20）。网盘的 SecretKey 复用 `AesGcmCipher` 存入
+`integration_config(provider='drive')`，S3 请求由 `storage/S3DriveClient` 用纯 JDK
+`HttpClient` 手写 SigV4 签名；`raw` 接口在鉴权白名单内，改用 query token 加显式
+`user_id` 条件读取，避免依赖线程上下文。
 
 启动类 `DeskApplication` 排除了 Spring Boot 的 `QuartzAutoConfiguration`（项目自行装配
 Scheduler），并在 `SpringApplication.run` 之前调用 `RestoreBootstrap` 应用待生效的恢复包。
@@ -84,10 +96,10 @@ Scheduler），并在 `SpringApplication.run` 之前调用 `RestoreBootstrap` �
 - **数据隔离**：所有业务表带 `user_id`，MyBatis-Plus `TenantLineInnerInterceptor` 自动注入；手写 `JdbcTemplate` SQL 必须显式加 `and user_id = ?`。详情越权返回 404，不泄漏资源存在性。
 - **管理边界**：`modules/console` 只做账号与配置的聚合统计，不读取用户内容正文。
 - **隐私**：密码 BCrypt；集成 Key AES-GCM 加密落库且只回显掩码；附件读取按 `id + user_id` 双重校验；MyBatis SQL 日志默认关闭，避免加密凭据整行进控制台。
-- **SQL**：禁用方言函数与 `SELECT *`；跨库差异在 Java 侧处理，保证将来能平滑迁移。
+- **SQL**：禁用方言函数与 `SELECT *`；跨库差异统一走 `DbDialect`（幂等插入、日期函数、`concat`、分页），SQLite 与 MySQL 共用同一段业务代码。
 - **日志**：`TraceIdFilter` 为每次请求分配 traceId；登录日志落 `sys_login_log`，写操作由 `AuditAspect` 自动落 `sys_oper_log`（参数脱敏）。
 - **调度**：Quartz RAMJobStore 触发，定义存 `sys_schedule_job`、历史存 `job_exec_log`；启动时重建 trigger，手动触发与定时触发共用 `ScheduleTaskRunner`。
-- **备份**：`VACUUM INTO` 生成一致快照，ZIP 含数据库、附件、品牌与密钥；恢复包在启动前应用，失败自动回滚。
+- **备份**：SQLite 用 `VACUUM INTO` 生成一致快照，MySQL 逐表导出 `database.jsonl`；ZIP 含数据库快照、附件、品牌与密钥。SQLite 恢复在启动前应用，MySQL 恢复在容器就绪后整体事务写回，失败自动回滚。
 
 接口路径、请求响应体与权限码见 [接口清单](../docs/接口清单.md)。
 
@@ -95,10 +107,11 @@ Scheduler），并在 `SpringApplication.run` 之前调用 `RestoreBootstrap` �
 
 ```
 data/
-├── minidesk.db      # SQLite 主库（WAL，含 -wal / -shm）
+├── minidesk.db      # SQLite 主库（WAL，含 -wal / -shm）；切 MySQL 后不再使用
 ├── .secret          # 集成 Key 加密密钥，丢失后已加密数据无法解开
 ├── uploads/         # 附件与头像
 ├── branding/        # 站点 Logo
+├── drive/           # 网盘本地文件（不在自动备份 ZIP 内，用本地存储时需另行快照）
 ├── backups/         # 后台生成的 ZIP 备份
 ├── restore-pending.zip  # 存在时下次启动应用恢复
 └── restore-last.json    # 上次恢复结果
@@ -109,7 +122,8 @@ data/
 
 ## 当前边界
 
-- 运行时只支持 SQLite；MySQL / PostgreSQL 仅提供 DDL，切换还需驱动、方言适配与种子 SQL 改造。
+- 运行时支持 SQLite 与 MySQL 8；PostgreSQL 仅提供 DDL，尚未做方言适配。
+- MySQL 模式下备份包是逻辑快照，建议同时保留数据库自身的 `mysqldump` / 云备份。
 - Quartz 采用 RAMJobStore + 库内定义，不支持集群与 misfire 补跑。
 - 测试覆盖有限，`mvn test` 目前用例较少，改动后请配合前端做端到端手工验证。
 

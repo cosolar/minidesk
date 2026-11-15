@@ -260,7 +260,6 @@ async function removeItem(item: JournalVO): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: calc(100vh - 200px);
 }
 
 .journal-tabs {

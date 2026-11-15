@@ -5,11 +5,55 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-15
+
+### Added
+
+- Website navigation (`/bookmark`): category and site CRUD, search, pinning,
+  drag-and-drop ordering, click counters, grid/list views, a one-click import of
+  16 common sites, and a compact mobile layout with a tap-to-open action menu.
+  Legacy work shortcuts are migrated on startup and `/work/tool` redirects here.
+- Cloud drive (`/drive`): folders, drag-and-drop uploads with real progress,
+  image/video/text previews, downloads, rename, delete, copy link and usage stats.
+  Storage can be switched between local disk and any S3-compatible endpoint
+  (RustFS / MinIO / AWS S3); requests are signed with AWS SigV4 using the JDK
+  HTTP client, and the secret key is AES-GCM encrypted at rest with only a mask
+  returned to the browser. A connection test performs a PUT/GET/DELETE probe.
+- Public/encrypted knowledge base grouping based on the MiniDocs publish state.
+- MySQL 8 runtime support next to SQLite: the JDBC driver ships with the image,
+  the dialect (pagination, idempotent inserts, date functions, string concat,
+  identifier quoting) is detected from JDBC metadata at startup, and the schema
+  script switches through `SPRING_SQL_INIT_SCHEMA_LOCATIONS`. Connection
+  settings are injected from `deploy/.env` and never baked into the image.
+- Logical database backup/restore for MySQL (`database.jsonl` inside the ZIP,
+  restored in a single transaction after startup) alongside the SQLite
+  `VACUUM INTO` snapshot.
+- `scripts/migrate_sqlite_to_mysql.py`: a standard-library one-shot migration
+  that copies existing SQLite data into MySQL, including Chinese text, quotes,
+  backslashes, newlines and emoji.
+
+### Changed
+
+- Weather now uses free, keyless public sources (China Weather Network with
+  Open-Meteo as fallback) instead of a QWeather API key; the settings page shows
+  the active source and the dashboard reports it, with a mock fallback when
+  every source is unreachable.
+- Console database size is read from `information_schema` on MySQL instead of
+  the SQLite file size.
+- Every page now fills the viewport width and height across desktop and mobile
+  breakpoints; the note sidebar was redesigned with grouped category cards and
+  excerpts, and note previews plus public share pages use the full content width.
+
+### Fixed
+
+- Single-jar SPA forwarding for public `/share/**` links and the new
+  `/bookmark` / `/drive` routes.
+- Production blank screen caused by Pinia's active instance being tree-shaken
+  from the bundled entrypoint.
 
 ### Planned
 
-- MySQL / PostgreSQL runtime profile and dialect-safe schema upgrades
+- PostgreSQL runtime profile and dialect-safe schema upgrades
 - Tauri desktop shell, offline icon set and data import
 - Automated test coverage, per-page visual polish and clustered scheduling
 

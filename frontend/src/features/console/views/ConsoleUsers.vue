@@ -136,7 +136,7 @@ function roleText(roles: string[]): string {
       />
     </div>
 
-    <el-table v-loading="isLoading" :data="users" class="table" height="calc(100vh - 250px)">
+    <el-table v-loading="isLoading" :data="users" class="table">
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="nickname" label="昵称" width="120" />

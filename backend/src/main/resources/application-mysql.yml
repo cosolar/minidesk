@@ -1,0 +1,24 @@
+# MySQL 生产配置（-DSPRING_PROFILES_ACTIVE=mysql 或 SPRING_PROFILES_ACTIVE=mysql）。
+#
+# Docker 部署推荐直接用 deploy/.env 注入 SPRING_DATASOURCE_* / SPRING_SQL_INIT_SCHEMA_LOCATIONS，
+# 不用激活 profile：环境变量优先级高于本文件，两种方式得到同一套数据源。
+# 本文件主要服务于裸机 `java -jar` 部署。
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/minidesk?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME:com.mysql.cj.jdbc.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:minidesk}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      maximum-pool-size: ${MINIDESK_DB_POOL_SIZE:12}
+      # MySQL 不接受 SQLite 的 PRAGMA；顺手把连接字符集固定下来
+      connection-init-sql: ${MINIDESK_DB_INIT_SQL:SET NAMES utf8mb4}
+      connection-timeout: 15000
+  sql:
+    init:
+      mode: ${SPRING_SQL_INIT_MODE:always}
+      schema-locations: ${SPRING_SQL_INIT_SCHEMA_LOCATIONS:classpath:db/schema-mysql.sql}
+      continue-on-error: false

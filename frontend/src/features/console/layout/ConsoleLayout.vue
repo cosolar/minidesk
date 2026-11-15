@@ -76,7 +76,9 @@ async function backToDesk(): Promise<void> {
   --console-primary: #4c6fff;
 
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--console-bg);
 }
 
@@ -175,6 +177,7 @@ async function backToDesk(): Promise<void> {
 .console__main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -212,8 +215,18 @@ async function backToDesk(): Promise<void> {
 
 .console__content {
   flex: 1;
-  padding: 20px;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px 12px 0;
+
+  > :deep(*) {
+    flex: 1 0 auto;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 767px) {
@@ -253,7 +266,7 @@ async function backToDesk(): Promise<void> {
   }
 
   .console__content {
-    padding: 14px;
+    padding: 12px 10px 0;
   }
 }
 </style>

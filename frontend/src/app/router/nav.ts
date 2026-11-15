@@ -46,6 +46,8 @@ export const unifiedNav: NavItem[] = [
   { path: '/todo', name: 'todo', title: '待办' },
   { path: '/calendar', name: 'calendar', title: '日历' },
   { path: '/note', name: 'note', title: '笔记' },
+  { path: '/bookmark', name: 'bookmark', title: '书签' },
+  { path: '/drive', name: 'drive', title: '网盘' },
 ]
 
 /** 统一入口的图标，与顺序一一对应 */
@@ -53,6 +55,8 @@ export const unifiedIcons: Record<string, Component> = {
   '/todo': List,
   '/calendar': Calendar,
   '/note': Notebook,
+  '/bookmark': Link,
+  '/drive': Folder,
 }
 
 /**
@@ -81,7 +85,6 @@ export const navGroups: NavGroup[] = [
       { path: '/work/journal', name: 'work-journal', title: '日志' },
       { path: '/work/asset', name: 'work-asset', title: '资产' },
       { path: '/work/meeting', name: 'work-meeting', title: '会议' },
-      { path: '/work/tool', name: 'work-tool', title: '书签' },
     ],
   },
   {
@@ -131,6 +134,7 @@ export const legacyRedirects: Array<{ from: string; to: string }> = [
   { from: '/work/schedule', to: '/calendar' },
   { from: '/work/note', to: '/note' },
   { from: '/study/note', to: '/note' },
+  { from: '/work/tool', to: '/bookmark' },
   { from: '/work/review', to: '/work/journal' },
   { from: '/study/read', to: '/study/resource' },
   { from: '/life/shopping', to: '/life/ledger' },

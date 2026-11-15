@@ -15,9 +15,9 @@
 
 | 事项 | 决定 | 落地要点 |
 |---|---|---|
-| 天气 | **和风天气**，Key 存数据库 | 后台设置页配置；Key 用 AES-GCM 加密落库；未配置时走 Mock Provider，前端显示「模拟数据」角标 |
+| 天气 | **免费公开数据源**，无需 Key | 中国天气网（国内直连）+ Open-Meteo（CC BY 4.0）自动降级；设置页配置城市与查看来源，全部失败才走 Mock Provider |
 | 登录 | **多账号隔离 + Sa-Token 鉴权** | Sa-Token 1.4x（JWT 无状态模式，不依赖 Redis）；角色 + 权限码做轻量 RBAC；数据隔离靠 MP 租户插件自动注入 `user_id` |
-| 数据库 | **开发用 SQLite**，完成后同步产出 MySQL 8 / PostgreSQL 完整 SQL | schema 用 Liquibase 单一来源定义，`update-sql` 一键导出三套 DDL |
+| 数据库 | **SQLite 零配置默认，MySQL 8 生产可选**，方言启动时自动识别 | 三套 DDL 由 `scripts/gen_schema.py` 从 SQLite schema 生成；Liquibase 尚未接入 |
 | 编辑器 | **Vditor 统一封装** | 笔记、工作日志、会议纪要、复盘、读书笔记、日记全部复用同一个 `MarkdownEditor` |
 | 定时任务 | **Quartz**，可持久化 + 界面手动触发 | `QRTZ_*` 表随主库建；后台「定时任务」页列出 Job、支持「立即执行」与「暂停」 |
 | 桌面端 | **V1 就上 Tauri 套壳** | JRE 用 jlink 裁剪后作为 sidecar 随包；同一套前端代码，运行时判断环境 |
@@ -37,10 +37,12 @@
 待办        工作 / 学习 / 生活 三板块的待办都在一处
 日历        工作日程、任务起止、考试、生日、纪念日
 笔记        工作记录、学习笔记、生活日记
+书签        个人网站导航，可分类、置顶、排序（2026-11-14 由工作板块上移）
+网盘        文件管理，本地磁盘 / S3 兼容对象存储二选一
 ──────────────
 工作 ▾
   ├ 项目        ├ 日志        ├ 资产
-  ├ 书签        └ 会议纪要
+  └ 会议纪要
 学习 ▾
   ├ 知识库      ├ 计划        ├ 打卡        └ 资源
 生活 ▾
@@ -76,7 +78,8 @@
 
 ### 2.3 路由总量
 
-约 52 条路由（含管理后台与详情页），全部懒加载。完整清单见 §6.3。
+约 54 条路由（含管理后台与详情页），全部懒加载。完整清单见 §6.3。
+`/work/tool` 保留为重定向，跳转 `/bookmark`，避免旧收藏失效。
 
 ---
 
@@ -103,7 +106,7 @@
 **提醒中心为什么不落库**：存成通知表就要处理「任务改期后旧提醒怎么撤回」「完成后通知还留着」两类不一致。
 实时聚合永远和源数据一致，代价只是一次多表查询。
 
-### 3.1 页面清单（19 个侧栏入口 + 3 个隐藏页）
+### 3.1 页面清单（20 个侧栏入口 + 3 个隐藏页）
 
 | 分区 | 页面 | 路由 |
 |---|---|---|
@@ -111,13 +114,14 @@
 | 统一 | 待办 | `/todo` |
 | 统一 | 日历 | `/calendar` |
 | 统一 | 笔记 | `/note` |
+| 统一 | 书签（网站导航） | `/bookmark` |
+| 统一 | 网盘 | `/drive` |
 | 隐藏 | 提醒中心（顶栏铃铛） | `/reminders` |
 | 隐藏 | 全局搜索（顶栏搜索 / Ctrl+K） | `/search` |
 | 隐藏 | 数据统计（工作台概览下钻） | `/stats` |
 | 工作 | 项目 | `/work/project` |
 | 工作 | 日志 | `/work/journal` |
 | 工作 | 资产 | `/work/asset` |
-| 工作 | 书签 | `/work/tool` |
 | 工作 | 会议纪要 | `/work/meeting` |
 | 学习 | 知识库 | `/study/kb` |
 | 学习 | 计划 | `/study/plan` |
@@ -137,7 +141,7 @@
 | 会议记录 | 新建笔记，`type = meeting` |
 | 目标管理 | 项目承载 + 复盘里写月度目标 |
 | 日常工作 / 学习任务 / 日常计划 | 待办按 `module` 筛选 |
-| 工作资料 / 家庭相册 | 本地网盘或对象存储，不进主流程 |
+| 工作资料 / 家庭相册 | 统一由「网盘」承载（本地磁盘 / S3 兼容对象存储），见 §7.7 |
 | 联系人 | 手机通讯录 |
 | 课程管理 | 学习计划里的「科目」，不单独建页面 |
 | 考试计划 | 学习计划 + 纪念日倒计时 |
@@ -251,11 +255,11 @@ router.beforeEach((to) => {
 | 系统监控 | `/console/system` | CPU/内存/磁盘/库大小/JVM/线程池（OSHI + Actuator） | `system:monitor:query` | P1 |
 | 定时任务 | `/console/jobs` | 任务列表、立即执行、暂停/恢复、执行日志 | `system:job:manage` | P1 |
 | 备份恢复 | `/console/backup` | 全库备份、下载、恢复、保留策略 | `system:backup:manage` | P1 |
-| 集成配置 | `/console/integrations` | 全局默认天气 Key / 知识库地址与 mdt_ 令牌（用户未配置时回退） | `system:integration:update` | P2 |
+| 集成配置 | `/console/integrations` | 知识库地址与 mdt_ 令牌（用户未配置时回退）；天气无需 Key | `system:integration:update` | P2 |
 | 审计日志 | `/console/audit` | 操作日志、登录日志、失败登录告警 | `system:audit:query` | P1 |
 | 系统设置 | `/console/settings` | 站点名、是否开放注册、密码策略、登录失败锁定阈值 | `system:setting:update` | P2 |
 
-> 以上是早期蓝图。当前实现是 `integration_config` **按用户隔离**（租户插件注入 `user_id`），没有 `user_id = 0` 的全局回退；天气在设置页按人配置，知识库令牌同理，另提供 `MINIDESK_MINIDOCS_TOKEN` 作为首次启动导入入口，见 §5.8。
+> 以上是早期蓝图。当前实现是 `integration_config` **按用户隔离**（租户插件注入 `user_id`），没有 `user_id = 0` 的全局回退；天气已改为免费公开数据源、无需配置；知识库令牌按人配置，另提供 `MINIDESK_MINIDOCS_TOKEN` 作为首次启动导入入口，见 §5.8。
 
 ### 4.3 用户管理（后台的核心页）
 
@@ -547,6 +551,8 @@ frontend/
 │  │  ├─ life/                    # ledger asset anniversary countdown shopping
 │  │  │                          # habit health profile trip diary wish
 │  │  ├─ calendar/  note/  search/  notification/  settings/
+│  │  ├─ bookmark/                # 网站导航：分类 / 站点 / 排序 / 点击统计
+│  │  └─ drive/                   # 网盘：文件管理 + 存储设置（local / s3）
 │  │  └─ 每个域内部：
 │  │     ├─ api.ts                # 仅本域的接口函数
 │  │     ├─ types.ts              # 本域 DTO / VO
@@ -574,13 +580,14 @@ frontend/
 /calendar    统一日历（任务起止 / 日程 / 考试 / 生日 / 纪念日 / 倒数）
 /reminders   提醒中心
 /note        统一笔记（工作记录 / 学习笔记 / 生活日记）
+/bookmark    网站导航（分类 / 置顶 / 排序 / 点击统计）
+/drive       网盘（本地磁盘 / S3 兼容对象存储）
 /search      全局搜索（?q= 关键词）
 /stats       数据统计
 
 // 工作
 /work/project  项目      /work/journal  日志
-/work/asset    资产      /work/tool     书签
-/work/meeting  会议纪要
+/work/asset    资产      /work/meeting  会议纪要
 
 // 学习
 /study/kb  知识库    /study/plan    计划
@@ -598,6 +605,7 @@ frontend/
 /work/task → /todo        /work/schedule → /calendar
 /study/note → /note       /work/review → /work/journal
 /study/read → /study/resource  /life/shopping → /life/ledger
+/work/tool → /bookmark
 
 # 管理后台（独立 Layout，meta.requiresAdmin = true）
 /console …（用户、角色、统计、监控、任务、备份、集成、审计、设置）
@@ -748,7 +756,10 @@ cn.minims.desk
 │  ├─ life/      ledger · budget · account · anniversary · countdown
 │  │             shopping · habit · health · profile · trip · wish · lifelog
 │  ├─ shared/    calendar · search · tag · favorite · notification
-│  ├─ integration/  qweather · minidocs
+│  ├─ common/bookmark/ 分类 · 站点 · overview 快照（一次请求返回整页）
+│  ├─ drive/     entity · service · controller · config（本地/S3 配置）
+│  │             · storage/S3DriveClient（纯 JDK HttpClient + AWS SigV4）
+│  ├─ integration/  weather（免费公开源） · minidocs
 │  └─ system/    setting · backup · job · export
 └─ job/          Quartz Job 实现（统一继承 AbstractUserJob）
 ```
@@ -868,36 +879,34 @@ sys_role_permission(role_id, permission_code)
 
 **Token 刷新**：Sa-Token 的 `timeout` 足够长（30 天），不做双 token 刷新；剩余有效期 < 3 天时后端在响应头 `X-Token-Renew` 通知前端静默 `StpUtil.renewTimeout()`。比双 token 简单一个量级。
 
-### 7.4 天气：Key 存库 + Mock 兜底
+### 7.4 天气：免费公开数据源 + 自动降级
 
-**存储**
+天气**不再需要任何 API Key 或第三方账号**，只用免费公开数据：
 
-```sql
-integration_config(
-  id, user_id, provider,        -- qweather
-  api_key_cipher,               -- AES-256-GCM 密文（Base64）
-  api_host,                     -- 用户的和风专属 API Host
-  city, extra_json, enabled, created_at, updated_at
-)
-```
-
-- 加密密钥来源优先级：环境变量 `MINIDESK_SECRET` → `data/.secret`（首次启动生成，权限 600）→ Tauri 下用系统钥匙串插件
-- 接口只回显掩码：`****3f2a`；保存时若传入掩码原样则不覆盖
-- `POST /api/settings/weather/test` 用当前 key 真实请求一次，返回成功/失败原因
+| 源 | 端点 | 说明 |
+|---|---|---|
+| `cma` | `toy1.weather.com.cn/search` → `d1.weather.com.cn/sk_2d/{code}.html` | 中国天气网公开实况；城市名自动解析 9 位城市代码，国内直连最快 |
+| `open-meteo` | `geocoding-api.open-meteo.com/v1/search` → `api.open-meteo.com/v1/forecast` | Open-Meteo（CC BY 4.0），WMO 天气码映射中文、风向按方位换算、风速换算蒲福风级 |
 
 **调用链**
 
 ```
-WeatherService.getNow(city)
+WeatherService.now(city)
   ├ 命中 Caffeine（30min）→ 返回
-  ├ 读 integration_config，enabled=false 或 key 空 → MockProvider
-  └ QWeatherClient（Resilience4j: Retry 3 次 / 熔断 / 3s 超时）
-        成功 → 写缓存
-        失败 → 返回最后一次缓存值（标记 stale=true）
-              无缓存 → MockProvider
+  ├ 按 minidesk.weather.providers 依次尝试（上次成功的源优先）
+  │    ├ cma：城市代码（缓存 7 天）→ 实况 JSONP → WeatherVO(source=cma)
+  │    └ open-meteo：经纬度（缓存 7 天）→ current → WeatherVO(source=open-meteo)
+  ├ 成功 → 写 30min 缓存 + 24h 最后一次真实结果
+  └ 全部失败 → 有历史结果则置 stale=true 返回；否则 MockProvider（isMock=true）
 ```
 
-**Mock 数据**：按城市名做稳定哈希，生成 `18℃ 晴`、`22℃ 多云` 这类合理值，`isMock: true`。前端在天气卡右上角显示「模拟」小角标，点击跳设置页。**不做假随机跳变**，同一个城市每次返回一致，便于开发调试。
+- 外部请求统一 2.5s 连接 / 读取超时，事务内禁止调用；失败只记 warn 日志。
+- 境外源超时后冷却 30 分钟，避免国内环境每个新城市都白等一次超时；海外部署用
+  `MINIDESK_WEATHER_PROVIDERS=open-meteo,cma` 优先走 Open-Meteo。
+- `POST /api/settings/weather/test` 跳过缓存实测一次，返回实际生效的数据源与温度。
+- **Mock 数据**：按城市名稳定哈希生成 `18℃ 晴`、`22℃ 多云` 这类合理值；同城恒定，不随机跳变，
+  前端天气卡显示「模拟」角标。
+- `integration_config` 现在只用于 MiniDocs 令牌；旧的 `qweather` 行不再被读取，无需迁移或删除。
 
 ### 7.5 Quartz：持久化 + 界面手动触发
 
@@ -934,6 +943,19 @@ WeatherService.getNow(city)
 - 去重：按内容 MD5，命中则复用已有物理文件
 - Tauri 下路径改为 `appDataDir/data/upload`，由 `minidesk.data-dir` 配置注入
 
+**网盘模块（`modules/drive`，2026-11-14 新增）**是面向用户的文件管理，与上面的附件上传相互独立：
+
+| 维度 | 实现 |
+|---|---|
+| 存储后端 | `local`：`${minidesk.data-dir}/drive/<userId>/<yyyyMM>/<uuid>.<ext>`；`s3`：RustFS / MinIO / AWS S3 |
+| 签名 | `S3DriveClient` 用纯 JDK `HttpClient` 手写 AWS SigV4，不引入 AWS SDK；支持 path-style / virtual-host |
+| 密钥 | `integration_config(provider='drive')`，SecretKey 经 `AesGcmCipher` 加密到 `api_key_cipher`，接口只回掩码 |
+| 元数据 | `drive_file` 表；`name` 是展示名、`object_key` 是物理路径，重命名不搬动对象 |
+| 目录 | `parent_id` 邻接表，递归删除上限 1000 节点；切换后端只影响新上传文件 |
+| 访问 | 配了 `publicUrl` 走对象存储直链，否则走 `/api/drive/files/{id}/raw?token=`（Sa-Token 白名单 + 显式 `user_id` 过滤） |
+| 上传 | multipart，单文件 ≤100MB，前端 XHR 上报真实进度，支持拖拽批量上传 |
+| 自检 | `POST /api/drive/config/test`：本地校验目录可写；S3 依次 PUT / GET / DELETE 探针对象 |
+
 ### 7.8 通知中心
 
 `notification(id, user_id, type, title, content, biz_type, biz_id, read, created_at)`
@@ -942,10 +964,10 @@ WeatherService.getNow(city)
 
 ### 7.9 备份与恢复
 
-- zip4j AES-256，包内：`minidesk.db`（SQLite）或 `dump.sql`（MySQL/PG）+ `upload/` + `manifest.json`
-- 恢复流程：**先自动备份当前库** → 校验 manifest → 停 Quartz → 替换文件 → 重启 DataSource → 恢复 Job 调度
-- 恢复必须二次确认（输入 `RESTORE` 字样），且只能在设置页操作
-- OSHI 读取磁盘剩余空间，低于 1GB 时禁止备份并提示
+- ZIP（JDK `ZipOutputStream`），包内：`minidesk.db`（SQLite）或 `database.jsonl`（MySQL）+ `uploads/` + `branding/` + `.secret` + `manifest.json`
+- 恢复流程：排队 `restore-pending.zip` → 重启应用 → SQLite 在 Spring 启动前替换库文件并保留回滚副本；MySQL 在容器就绪后按逻辑快照整体事务写回
+- 恢复入口在 `/console/backups`，结果写 `restore-last.json` 并在后台展示
+- 当前未接入 zip4j（用 JDK 标准库）、未做恢复口令二次确认、未接 OSHI 磁盘余量检查
 
 ---
 
@@ -1244,7 +1266,8 @@ src-tauri/
 
 ```
 前端  5180  vite proxy /api → 18080
-后端  18080 Spring Boot + SQLite(data/minidesk.db)
+后端  18080 Spring Boot + SQLite(data/minidesk.db)；生产可切 MySQL 8
+      数据源、驱动、连接初始化 SQL 与建表脚本由环境变量成组切换
 ```
 
 ⚠️ 本机沙箱会注入 `PORT` 环境变量，覆盖 `server.port`，启动必须显式 `--server.port=18080`。
@@ -1253,10 +1276,11 @@ src-tauri/
 
 ```
 data/
-├─ minidesk.db        SQLite 主库
+├─ minidesk.db        SQLite 主库（切 MySQL 后不再使用，但目录仍要保留）
 ├─ .secret            集成密钥（首次生成，600）
 ├─ upload/{uid}/...   附件与图片
 ├─ thumb/             缩略图
+├─ drive/{uid}/...    网盘本地存储（切到 S3 后此目录只保留历史文件）
 ├─ backup/            备份包
 └─ logs/              按天轮转
 ```
@@ -1308,7 +1332,7 @@ spring.datasource.url: jdbc:postgresql://host:5432/minidesk
 | P0-4 | 待办（含重复规则）、项目（含任务关联）、日历聚合 | 5 |
 | P0-5 | 笔记（Vditor 封装）、工作复盘（自动汇总） | 3 |
 | P0-6 | 记账（含预算）、学习计划/任务/时长、习惯打卡 | 4 |
-| P0-7 | 设置（天气 Key/账号/备份）、Quartz、单 Jar 部署 | 3 |
+| P0-7 | 设置（天气数据源/账号/备份）、Quartz、单 Jar 部署 | 3 |
 | P0-8 | **管理后台最小版**：独立 Layout、登录分流、用户管理（增改禁删/重置密码）、注册开关、登录日志、操作审计 | 3 |
 
 **一期验收**：能登录、能记一整天的事、首页数据全部真实、刷新不掉登录、备份能恢复；管理员登录直达后台并能完整管理账号。

@@ -52,7 +52,10 @@ function onToggleSidebar(): void {
   position: relative;
   isolation: isolate;
   display: flex;
-  min-height: 100vh;
+  // 固定为视口高度，内容区自己滚动；页面根节点用 flex 撑满剩余空间，
+  // 避免出现「卡片下方/两侧露底」的空白带。100vh 作为旧浏览器回退。
+  height: 100vh;
+  height: 100dvh;
   background: var(--bg-page);
 
   // 品牌色晕染：纯色底上做玻璃卡片会像「白盒子」，加一层很淡的色雾，
@@ -85,19 +88,32 @@ function onToggleSidebar(): void {
 .layout__main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
 
 .layout__content {
   flex: 1;
+  min-height: 0;
   width: 100%;
-  max-width: 1520px;
-  margin: 0 auto;
-  padding: 4px $content-padding 32px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  // 左右保留最小呼吸位（与顶栏一致），底部为 0，贴住视口底边。
+  padding: 4px $content-padding 0;
+
+  // flex: 1 0 auto —— 内容不足时根节点被拉伸填满可视区（无底部留白），
+  // 内容超出时不压缩、由本容器滚动。所有页面统一生效，无需逐页定高。
+  > :deep(*) {
+    flex: 1 0 auto;
+    min-width: 0;
+  }
 
   @include respond-below(sm) {
-    padding: 4px 14px 84px;
+    // 移动端底部要给固定 TabBar 让位，其余三边同样贴边。
+    padding: 4px 10px 72px;
   }
 }
 </style>

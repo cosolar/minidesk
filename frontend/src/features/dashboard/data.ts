@@ -137,12 +137,12 @@ export const modules: ModuleConfig[] = [
         route: '/work/asset',
       },
       {
-        code: 'work.tool',
-        name: '书签',
-        icon: 'lucide:link',
+        code: 'drive',
+        name: '网盘',
+        icon: 'lucide:hard-drive',
         color: '#4C6FFF',
         bg: '#EDF1FF',
-        route: '/work/tool',
+        route: '/drive',
       },
       {
         code: 'work.meeting',

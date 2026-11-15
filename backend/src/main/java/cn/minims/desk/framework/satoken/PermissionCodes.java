@@ -19,9 +19,15 @@ public final class PermissionCodes {
     public static final String WORK_DOC_MANAGE = "work:doc:manage";
     public static final String WORK_MEETING_MANAGE = "work:meeting:manage";
 
-    /** 导航链接：工作「书签」与学习「资源」共用 */
+    /** 导航链接：学习「资源」仍在用；工作「书签」已迁到统一入口的网站导航 */
     public static final String SHARED_NAV_MANAGE = "shared:nav:manage";
     public static final String SHARED_CALENDAR_MANAGE = "shared:calendar:manage";
+
+    /** 网站导航（统一入口「书签」） */
+    public static final String SHARED_BOOKMARK_MANAGE = "shared:bookmark:manage";
+
+    /** 网盘文件与存储配置 */
+    public static final String SHARED_DRIVE_MANAGE = "shared:drive:manage";
 
     public static final String LIFE_CONTACT_MANAGE = "life:contact:manage";
     public static final String LIFE_ALBUM_MANAGE = "life:album:manage";

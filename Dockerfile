@@ -4,7 +4,7 @@
 # MiniDesk 官方镜像：Vue 3 静态资源打进 Spring Boot 单 Jar，一个进程、一个端口、一个数据卷。
 #
 #   浏览器 ──> :18080  Spring Boot（页面 /，接口 /api/**，SPA 回退 /index.html）
-#                         └── SQLite（/data/minidesk.db）
+#                         └── SQLite（/data/minidesk.db）或外部 MySQL（生产）
 #
 # 与 scripts/build_single_jar.py 走同一套契约：前端产物放到 ../frontend/dist，
 # 由 Maven 的 single-jar profile 复制进 BOOT-INF/classes/static。
@@ -72,7 +72,7 @@ RUN cd backend && mvn -B -ntp clean package -Dmaven.test.skip=true -Psingle-jar 
 FROM eclipse-temurin:${JRE_VERSION}
 
 LABEL org.opencontainers.image.title="MiniDesk" \
-      org.opencontainers.image.description="自托管的极简个人效率工作台（前后端单镜像，默认 SQLite）" \
+      org.opencontainers.image.description="自托管的极简个人效率工作台（前后端单镜像，SQLite / MySQL）" \
       org.opencontainers.image.source="https://github.com/cosolar/minidesk" \
       org.opencontainers.image.licenses="MIT"
 
@@ -96,7 +96,8 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh \
     && mkdir -p /data \
     && chown -R minidesk:minidesk /data
 
-# SQLite 主库、.secret、uploads/、branding/、backups/、恢复包全在 /data
+# SQLite 主库、.secret、uploads/、branding/、drive/、backups/、恢复包全在 /data；
+# 切 MySQL 后主库移到外部，但密钥与附件仍依赖这个卷
 VOLUME ["/data"]
 EXPOSE 18080
 

@@ -20,6 +20,8 @@ backend/data/*
 backend/logs/
 
 # ---------- 本地数据、密钥、环境变量（绝不入库） ----------
+# 仓库根目录直接跑 java -jar 时生成的预览数据（含主库、.secret、网盘文件）
+/data/
 *.db
 *.db-shm
 *.db-wal

@@ -13,7 +13,7 @@ const userStore = useUserStore()
 const appStore = useAppStore()
 
 const props = defineProps<{
-  weather?: { temp: number; text: string; city: string; isMock: boolean } | null
+  weather?: { temp: number; text: string; city: string; isMock: boolean; source: string } | null
 }>()
 
 const greeting = computed(() => {
@@ -55,6 +55,7 @@ const greeting = computed(() => {
           :text="props.weather.text"
           :city="props.weather.city"
           :is-mock="props.weather.isMock"
+          :source="props.weather.source"
         />
       </div>
     </div>

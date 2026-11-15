@@ -1,7 +1,9 @@
 package cn.minims.desk.modules.system.controller;
 
 import cn.dev33.satoken.annotation.SaCheckPermission;
+import cn.minims.desk.common.api.ErrorCode;
 import cn.minims.desk.common.api.Result;
+import cn.minims.desk.common.exception.BizException;
 import cn.minims.desk.framework.satoken.PermissionCodes;
 import cn.minims.desk.modules.system.service.SettingsService;
 import cn.minims.desk.modules.system.vo.SettingsVO;
@@ -22,7 +24,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/settings")
 public class SettingsController {
 
-    private static final List<String> PROVIDERS = List.of("qweather", "minidocs");
+    /** 天气已改用免费公开数据源，不再需要保存第三方 Key */
+    private static final List<String> PROVIDERS = List.of("minidocs");
 
     private final SettingsService settingsService;
 
@@ -51,6 +54,9 @@ public class SettingsController {
     public Result<SettingsVO.IntegrationVO> saveIntegration(
             @org.springframework.web.bind.annotation.PathVariable String provider,
             @RequestBody Map<String, Object> body) {
+        if (!PROVIDERS.contains(provider)) {
+            throw new BizException(ErrorCode.PARAM_ERROR, "不支持的集成类型");
+        }
         String apiKey = body.get("apiKey") == null ? null : String.valueOf(body.get("apiKey"));
         String apiHost = body.get("apiHost") == null ? null : String.valueOf(body.get("apiHost"));
         Boolean enabled = body.get("enabled") == null ? null : Boolean.valueOf(String.valueOf(body.get("enabled")));

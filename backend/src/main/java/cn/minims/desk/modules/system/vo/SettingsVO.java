@@ -19,6 +19,7 @@ public record SettingsVO(
     ) {
     }
 
-    public record TestResult(boolean ok, String message, Integer temp, String text) {
+    /** 天气连通性测试：source 为实际生效的数据源（cma / open-meteo / mock）。 */
+    public record TestResult(boolean ok, String message, Integer temp, String text, String source) {
     }
 }

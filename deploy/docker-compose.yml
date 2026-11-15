@@ -1,15 +1,16 @@
-# MiniDesk 官方单镜像快速部署：前端 + 后端 + SQLite 全在一个容器里。
+# MiniDesk 官方单镜像快速部署：前端 + 后端在一个容器里。
 #
 #   1) 准备必填变量（不要用默认密钥上公网）
 #        export SA_TOKEN_SECRET="$(openssl rand -hex 32)"
 #        export MINIDESK_CLAIM_TOKEN='换成自定义令牌'
-#   2) 启动
+#   2) 启动（默认 SQLite；生产切 MySQL 见 docs/部署指南.md §4.10）
 #        docker compose -f deploy/docker-compose.yml up -d
 #   3) 打开 http://服务器IP:18080 注册，第一个注册者成为管理员
 #
 # 容器固定监听 18080；MINIDESK_PORT 只改宿主侧映射端口。
 # 反向代理（HTTPS、域名）建议放在容器外：Nginx / Caddy 把请求转到 18080 即可，
 # 页面在 /、接口在 /api，不需要剥路径前缀。
+# 数据库连接参数全部从 deploy/.env 注入，凭据不进仓库、不进镜像。
 
 name: minidesk
 
@@ -26,10 +27,24 @@ services:
       SA_TOKEN_SECRET: ${SA_TOKEN_SECRET:?请先设置 SA_TOKEN_SECRET（至少 32 字符随机串）}
       # 公网部署务必设置：首个注册者必须填写正确令牌才能领取管理员
       MINIDESK_CLAIM_TOKEN: ${MINIDESK_CLAIM_TOKEN:-}
-      # 主库、.secret、uploads/、branding/、backups/、恢复包都跟随这个目录
+      # .secret、uploads/、branding/、drive/（网盘本地文件）、backups/、恢复包都跟随这个目录；
+      # MySQL 模式下主库不在该目录，但附件与加密主密钥仍在这里，卷必须保留
       MINIDESK_DATA_DIR: /data
-      # 不要设置 SPRING_DATASOURCE_URL：主库 URL 已跟随 MINIDESK_DATA_DIR，
-      # 单独覆盖会让「数据目录」与「数据库文件」两处配置分叉。
+      # 免费天气数据源优先级；海外部署改成 open-meteo,cma
+      MINIDESK_WEATHER_PROVIDERS: ${MINIDESK_WEATHER_PROVIDERS:-cma,open-meteo}
+      # 数据库：默认 SQLite，生产在 deploy/.env 里把这一组改成 MySQL。
+      # 方言由 JDBC 元数据自动判定，建表脚本随 SPRING_SQL_INIT_SCHEMA_LOCATIONS 一起切换。
+      SPRING_DATASOURCE_URL: ${MINIDESK_DB_URL:-jdbc:sqlite:/data/minidesk.db}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${MINIDESK_DB_DRIVER:-org.sqlite.JDBC}
+      SPRING_DATASOURCE_USERNAME: ${MINIDESK_DB_USERNAME:-}
+      SPRING_DATASOURCE_PASSWORD: ${MINIDESK_DB_PASSWORD:-}
+      MINIDESK_DB_INIT_SQL: ${MINIDESK_DB_INIT_SQL:-PRAGMA journal_mode=WAL;}
+      SPRING_SQL_INIT_SCHEMA_LOCATIONS: ${MINIDESK_DB_SCHEMA:-classpath:db/schema-sqlite.sql}
+      MINIDESK_DB_POOL_SIZE: ${MINIDESK_DB_POOL_SIZE:-8}
+    # 同机部署的 MySQL（例如 1Panel 管理的容器）可通过宿主机发布端口访问，
+    # 不必把业务容器接进面板的私有网络。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - minidesk-data:/data
     # JVM 堆 = 内存上限 × 0.75（entrypoint 里的 MaxRAMPercentage=75）

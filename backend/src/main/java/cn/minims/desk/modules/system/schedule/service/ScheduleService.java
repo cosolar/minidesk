@@ -3,6 +3,7 @@ package cn.minims.desk.modules.system.schedule.service;
 import cn.minims.desk.common.api.ErrorCode;
 import cn.minims.desk.common.api.PageResult;
 import cn.minims.desk.common.exception.BizException;
+import cn.minims.desk.framework.db.DbDialect;
 import cn.minims.desk.modules.system.schedule.job.DeskJob;
 import cn.minims.desk.modules.system.schedule.job.JobKeys;
 import cn.minims.desk.modules.system.schedule.vo.ScheduleVO;
@@ -67,24 +68,25 @@ public class ScheduleService {
     private final JdbcTemplate jdbc;
     private final Scheduler scheduler;
     private final ScheduleTaskRunner runner;
+    private final DbDialect dialect;
 
-    public ScheduleService(JdbcTemplate jdbc, Scheduler scheduler, ScheduleTaskRunner runner) {
+    public ScheduleService(JdbcTemplate jdbc, Scheduler scheduler, ScheduleTaskRunner runner, DbDialect dialect) {
         this.jdbc = jdbc;
         this.scheduler = scheduler;
         this.runner = runner;
+        this.dialect = dialect;
     }
 
     /** 首次启动写入内置任务；已有配置一律保留，用户改过的 cron 不会被覆盖。 */
     @Transactional(rollbackFor = Exception.class)
     public void ensureDefaults() {
         String now = LocalDateTime.now().format(DATETIME);
+        String insertJob = dialect.insertIgnore("sys_schedule_job",
+                "(job_code, job_name, description, cron_expr, enabled, "
+                        + "allow_manual, sort_order, created_at, updated_at)")
+                + " values (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         for (ScheduleVO.JobItem item : DEFAULTS) {
-            jdbc.update("""
-                            insert or ignore into sys_schedule_job
-                                (job_code, job_name, description, cron_expr, enabled,
-                                 allow_manual, sort_order, created_at, updated_at)
-                            values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                            """,
+            jdbc.update(insertJob,
                     item.code(), item.name(), item.description(), item.cronExpr(),
                     item.enabled() ? 1 : 0, item.allowManual() ? 1 : 0,
                     item.sortOrder(), now, now);

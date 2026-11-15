@@ -40,6 +40,7 @@ public final class MiniDocsVO {
             String orgSlug,
             String description,
             String visibility,
+            boolean encrypted,
             Integer docCount,
             List<String> tags,
             String updatedText,

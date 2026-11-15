@@ -27,6 +27,9 @@ import java.util.zip.ZipInputStream;
  *
  * <p>安全策略：ZIP 路径穿越与解压总量限制、SQLite 文件头与核心表校验、
  * 替换前先把当前库另存一份、任何一步失败都回滚到原库。
+ *
+ * <p>MySQL 模式没有可替换的库文件，这里保留 pending 包，交给
+ * {@link MysqlRestoreRunner} 在 Spring 容器就绪后按逻辑快照恢复。
  */
 public final class RestoreBootstrap {
 
@@ -41,6 +44,10 @@ public final class RestoreBootstrap {
         Path root = dataRoot();
         Path pending = root.resolve(PENDING_NAME);
         if (!Files.isRegularFile(pending)) {
+            return;
+        }
+        if (isExternalDatabase()) {
+            System.out.println("[MiniDesk] external database detected, restore will run after startup");
             return;
         }
         System.out.println("[MiniDesk] restore package detected, applying before startup");
@@ -101,7 +108,17 @@ public final class RestoreBootstrap {
         }
     }
 
-    private static void unpack(Path zip, Path target) throws IOException {
+    /** 本类在 Spring 启动前运行，只能用环境变量判断数据库类型。 */
+    public static boolean isExternalDatabase() {
+        String profile = System.getProperty("spring.profiles.active",
+                System.getenv().getOrDefault("SPRING_PROFILES_ACTIVE", ""));
+        String url = System.getProperty("spring.datasource.url",
+                System.getenv().getOrDefault("SPRING_DATASOURCE_URL", ""));
+        return profile.contains("mysql") || url.startsWith("jdbc:mysql:")
+                || url.startsWith("jdbc:postgresql:");
+    }
+
+    public static void unpack(Path zip, Path target) throws IOException {
         int entries = 0;
         long total = 0;
         try (ZipInputStream in = new ZipInputStream(Files.newInputStream(zip))) {
@@ -149,7 +166,7 @@ public final class RestoreBootstrap {
         }
     }
 
-    private static void overlay(Path source, Path target) throws IOException {
+    public static void overlay(Path source, Path target) throws IOException {
         if (!Files.isDirectory(source)) {
             return;
         }
@@ -162,7 +179,7 @@ public final class RestoreBootstrap {
         }
     }
 
-    private static void deleteTree(Path root) {
+    public static void deleteTree(Path root) {
         if (!Files.exists(root)) {
             return;
         }
@@ -179,7 +196,7 @@ public final class RestoreBootstrap {
         }
     }
 
-    private static Path dataRoot() {
+    public static Path dataRoot() {
         String configured = System.getProperty("minidesk.data-dir",
                 System.getenv().getOrDefault("MINIDESK_DATA_DIR", "./data"));
         return Path.of(configured).toAbsolutePath().normalize();

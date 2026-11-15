@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 笔记业务。列表不返回正文，避免一次拉几百篇 Markdown。
+ * 笔记业务。列表只带裁剪后的纯文本摘要，避免一次拉几百篇 Markdown 原文。
  */
 @Service
 public class NoteService {
@@ -31,8 +31,8 @@ public class NoteService {
 
     public PageResult<NoteSummaryVO> page(String module, String type, String keyword, long pageNo, long pageSize) {
         LambdaQueryWrapper<NoteDO> query = Wrappers.lambdaQuery(NoteDO.class)
-                .select(NoteDO::getId, NoteDO::getTitle, NoteDO::getModule, NoteDO::getType,
-                        NoteDO::getTags, NoteDO::getWordCount, NoteDO::getPinned,
+                .select(NoteDO::getId, NoteDO::getTitle, NoteDO::getContent, NoteDO::getModule,
+                        NoteDO::getType, NoteDO::getTags, NoteDO::getWordCount, NoteDO::getPinned,
                         NoteDO::getCreatedAt, NoteDO::getUpdatedAt)
                 .eq(NoteDO::getArchived, 0);
         if (StringUtils.hasText(module)) {

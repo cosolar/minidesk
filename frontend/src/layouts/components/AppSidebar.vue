@@ -199,11 +199,10 @@ function startResize(event: MouseEvent): void {
 
 <style scoped lang="scss">
 .sidebar {
-  position: sticky;
-  top: 0;
+  position: relative;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   padding: 14px 12px 0;
   // 侧栏也做玻璃：半透明渐变 + 背景模糊，让页面底色晕染透上来
   background: linear-gradient(

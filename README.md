@@ -13,7 +13,7 @@
 
 效率工具越多，切换成本越高：任务在一个应用、笔记在另一个应用、账单在第三应用，最后没人愿意打开。MiniDesk 把**高频动作收进一个首页**，把**同一类事情收进一个入口**——工作、学习、生活三个板块共用一套待办、一个日历、一个笔记编辑器、一次全局搜索。
 
-数据放在自己的机器上，一个 SQLite 文件就是全部。多账号之间严格隔离，管理员也看不到别人的内容正文。
+数据放在自己的机器上：默认一个 SQLite 文件就是全部，生产也可以直接接自己的 MySQL。多账号之间严格隔离，管理员也看不到别人的内容正文。
 
 ## 当前状态
 
@@ -22,8 +22,8 @@
 | 已经可用 | 规划中（尚未实现） |
 | --- | --- |
 | Vue 3 + Spring Boot 3 全栈，前后端分离开发，也可打成单 Jar | Tauri 桌面套壳 |
-| 工作台首页、统一待办 / 日历 / 笔记 / 提醒 / 搜索 / 统计 | MySQL / PostgreSQL 运行时适配（DDL 已就绪） |
-| 工作 / 学习 / 生活三大板块共 14 个功能页 | 离线图标包、数据导入、家庭共享 |
+| 工作台首页、统一待办 / 日历 / 笔记 / 书签 / 网盘、提醒 / 搜索 / 统计 | PostgreSQL 运行时适配（DDL 已就绪） |
+| 工作 / 学习 / 生活三大板块共 13 个功能页 | 离线图标包、数据导入、家庭共享 |
 | 五套主题、可拖拽折叠侧栏、后台品牌 Logo 替换 | 逐页深度视觉重设计 |
 | Quartz 定时任务：4 个内置任务、Cron 编辑、启停、立即执行、执行日志 | 完整自动化测试覆盖 |
 | 在线备份 / 下载 / 上传恢复（重启生效，带完整性校验与失败回滚） | 集群调度与 misfire 补跑 |
@@ -32,20 +32,25 @@
 | Docker 官方单镜像 + GitHub Actions 打 tag 自动发布 | |
 | 自助注册（用户名 / 邮箱验证码）、角色权限、多账号隔离 | |
 | `/console` 管理后台：用户、站点配置、品牌、邮件、任务、备份、审计 | |
-| 和风天气集成（未配置自动降级为模拟数据）、Key 加密存储 | |
+| 免费公开天气数据源（中国天气网 / Open-Meteo），无需 API Key、失败自动降级 | |
 | MiniDocs 知识库对接：我的库 / 公开库、目录树、正文预览、文档搜索、笔记沉淀 | |
-| SQLite 60 张表 + MySQL 8 / PostgreSQL 14 完整建表 SQL | |
+| 网站导航：分类 / 站点管理、置顶、拖拽排序、访问统计、一键导入常用站点 | |
+| 网盘：目录、上传、预览、下载、重命名、删除；本地磁盘与 S3 兼容对象存储（RustFS / MinIO / AWS S3）可切换，密钥加密落库 | |
+| SQLite 64 张表 + MySQL 8 / PostgreSQL 14 完整建表 SQL | |
+| SQLite 与 MySQL 8 运行时双支持：方言自动识别、逻辑备份恢复、旧库数据迁移脚本 | |
 
 ## 主要功能
 
 - **一个首页**：问候语与实时时钟、天气、快捷入口、三大板块卡片、今日待办、学习进度、生活记录、月历与数据概览。
-- **六个统一入口**：待办（工作 / 学习 / 生活共用一张 `task` 表）、日历（任务起止、日程、考试、生日、纪念日、倒数日聚合）、笔记（Vditor Markdown）、提醒（顶栏铃铛）、全局搜索（顶栏 / `Ctrl+K`）、数据统计（工作台概览 + `/stats` 详情）。
-- **三大板块**：工作（项目、日志、资产、书签、会议纪要）、学习（知识库、计划、打卡、资源）、生活（记账、纪念日、日记、相册、联系人）。
+- **统一入口**：待办（工作 / 学习 / 生活共用一张 `task` 表）、日历（任务起止、日程、考试、生日、纪念日、倒数日聚合）、笔记（Markdown）、书签（个人网站导航）、网盘（文件管理）进侧栏；提醒（顶栏铃铛）、全局搜索（顶栏 / `Ctrl+K`）、数据统计（工作台概览 + `/stats` 详情）不进侧栏。
+- **三大板块**：工作（项目、日志、资产、会议纪要）、学习（知识库、计划、打卡、资源）、生活（记账、纪念日、日记、相册、联系人）。
+- **书签**：分类 CRUD、站点 CRUD、搜索、置顶、拖拽排序、点击统计、网格 / 列表视图、一键导入 16 个常用站点；旧工作板块「书签」已上移为统一入口，`/work/tool` 自动跳转 `/bookmark`。
+- **网盘**：文件夹、拖拽批量上传与进度、图片 / 视频 / 文本预览、下载、重命名、删除、复制链接、存储用量统计；存储设置抽屉可在「本地磁盘」与「S3 兼容对象存储」之间切换，支持 Endpoint / Bucket / Region / AK / SK / 对象前缀 / 公链前缀 / ACL / path-style 与一键连通性自检。
 - **五套主题**：青绿 · 山水（默认）、紫色 · 极简、深色 · 星空、暖色 · 温馨、简约 · 纯净。主题同时驱动问候语、Hero 色调与 Element Plus 主色。
 - **账号与权限**：Sa-Token JWT 无状态鉴权、MyBatis-Plus 租户插件自动注入 `user_id`、BCrypt 密码、登录失败锁定、登录与操作日志。管理员不可读取用户内容正文。
 - **管理后台 `/console`**：独立布局，用户管理、注册开关、站点名称、横版 / 方形 Logo、SMTP 发件配置与日志审计。
 - **个人中心**：头像、昵称、邮箱、密码修改。
-- **集成配置**：设置页配置和风天气 Key / Host 与 MiniDocs 知识库站点 / `mdt_` 访问令牌，AES-GCM 加密落库、前端只回显掩码；天气未配置时降级为模拟数据。知识库页可浏览「我的知识库」与「站点公开库」的目录树和正文，笔记可一键沉淀为文档；令牌也可用 `MINIDESK_MINIDOCS_TOKEN` 在首次启动时导入。
+- **集成配置**：天气直接用免费公开数据源（中国天气网 / Open-Meteo），无需 API Key，设置页可查看当前生效源并测试连接；MiniDocs 知识库站点与 `mdt_` 访问令牌仍按用户配置，AES-GCM 加密落库、前端只回显掩码。知识库页可浏览「我的知识库」与「站点公开库」的目录树和正文，笔记可一键沉淀为文档；令牌也可用 `MINIDESK_MINIDOCS_TOKEN` 在首次启动时导入。
 - **交互细节**：侧栏宽度可拖拽（184–320px）、可折叠、双击复位；旧路由保留重定向，收藏夹不会失效。窄屏改用底部 5 项 TabBar。
 - **运维能力**：Quartz 调度（提醒扫描 / 日报草稿 / 自动备份 / 日志清理）、在线备份与恢复、写操作审计。任务定义与执行历史落库，重启后自动重建触发器。
 
@@ -63,7 +68,7 @@
 | --- | --- |
 | 前端 | Vue 3.5、TypeScript、Vite 8、Element Plus 2、Vue Router 4、Pinia 2、TanStack Vue Query 5、VueUse、Axios、Vditor 4、Sass、`@iconify/vue` |
 | 后端 | Java 17、Spring Boot 3.5、MyBatis-Plus 3.5、Sa-Token 1.46（JWT 无状态）、Quartz 2.5（RAM 调度 + 库持久化）、AspectJ（审计切面）、Spring Mail、Caffeine、Hutool、SQLite JDBC |
-| 数据库 | SQLite（默认）；MySQL 8 / PostgreSQL 14 建表脚本见 `backend/src/main/resources/db/` |
+| 数据库 | SQLite（默认，零配置）或 MySQL 8（生产推荐）；PostgreSQL 14 建表脚本见 `backend/src/main/resources/db/` |
 | 约定 | 统一 `Result` 响应体与 traceId、`MiniDesk-Token` 请求头、阿里 Java 开发规范、英文 Conventional Commits |
 
 ## 快速开始
@@ -119,7 +124,7 @@ npm run dev
 
 1. 打开登录页，点击「注册」。**第一个注册的用户自动成为管理员**，之后注册的都是普通成员。
 2. 用管理员账号访问 `/console`，可关闭注册、改站点名称、上传 Logo、配置 SMTP。
-3. 在「设置 → 集成配置」填入和风天气 Key；不填也能正常用，首页会显示模拟天气。
+3. 「设置 → 天气数据源」不用填任何 Key，首页会按城市自动读取免费公开天气；海外部署可用 `MINIDESK_WEATHER_PROVIDERS=open-meteo,cma` 调整优先级。
 4. 知识库：到 MiniDocs 的「账号 → 第三方应用授权」签发一枚 `mdt_` 令牌，填入同一页的「知识库」卡片并开启；不填也能浏览站点公开库，读写令牌额外支持把笔记沉淀成文档。
 5. 邮箱验证码注册只在 SMTP 配置完成后才会在注册页出现。
 
@@ -140,7 +145,7 @@ python scripts/build_single_jar.py --skip-frontend --offline   # 复用已有 di
 java -jar backend/target/minidesk.jar --server.port=18080
 ```
 
-单 Jar 使用 `mvn -Psingle-jar package`，会条件化启用前端路由转发，不影响前后端分离开发。分离部署时用 Nginx 托管 `dist/`、把 `/api` 反代到后端并配置 SPA fallback。完整的生产配置、HTTPS、备份恢复与三库切换说明见 [docs/部署指南.md](docs/部署指南.md)。
+单 Jar 使用 `mvn -Psingle-jar package`，会条件化启用前端路由转发，不影响前后端分离开发。分离部署时用 Nginx 托管 `dist/`、把 `/api` 反代到后端并配置 SPA fallback。完整的生产配置、HTTPS、备份恢复与 SQLite / MySQL 切换说明见 [docs/部署指南.md](docs/部署指南.md)。
 
 ## 配置
 
@@ -150,11 +155,28 @@ java -jar backend/target/minidesk.jar --server.port=18080
 | --- | --- | --- |
 | `SA_TOKEN_SECRET` | `minidesk-dev-secret-please-override-in-prod` | JWT 签名密钥，**生产必须替换**为长随机串 |
 | `MINIDESK_CLAIM_TOKEN` | 空 | 设置后，首个注册者必须填写该令牌才能成为管理员 |
-| `SPRING_DATASOURCE_URL` | `jdbc:sqlite:./data/minidesk.db` | 数据源地址 |
+| `SPRING_DATASOURCE_URL` | `jdbc:sqlite:./data/minidesk.db` | 数据源地址；Docker 部署用 `MINIDESK_DB_URL` 覆盖 |
+| `SPRING_DATASOURCE_DRIVER_CLASS_NAME` | `org.sqlite.JDBC` | MySQL 时为 `com.mysql.cj.jdbc.Driver` |
+| `SPRING_SQL_INIT_SCHEMA_LOCATIONS` | `classpath:db/schema-sqlite.sql` | MySQL 时为 `classpath:db/schema-mysql.sql` |
+| `MINIDESK_DB_INIT_SQL` | `PRAGMA journal_mode=WAL;` | MySQL 时为 `SET NAMES utf8mb4` |
+| `MINIDESK_DB_POOL_SIZE` | `8` | Hikari 连接池上限，MySQL 建议 12 |
 | `SERVER_PORT` | `18080` | 建议用命令行参数显式指定 |
 | `MINIDESK_DATA_DIR` | `./data` | 数据目录；单 Jar 部署建议用绝对路径，恢复引导也读这个变量 |
 
-前端构建期变量见 [`.env.example`](.env.example) 与 `frontend/.env.*`；站点名称、Logo、天气 Key、SMTP 等运行时配置都在界面里改，存数据库。
+前端构建期变量见 [`.env.example`](.env.example) 与 `frontend/.env.*`；站点名称、Logo、知识库令牌、SMTP 等运行时配置都在界面里改，存数据库；天气数据源顺序用 `MINIDESK_WEATHER_PROVIDERS` 环境变量调整。
+
+切 MySQL 时（Docker 部署）只需在 `deploy/.env` 写这一组，镜像与代码都不用改：
+`MINIDESK_DB_URL`、`MINIDESK_DB_DRIVER=com.mysql.cj.jdbc.Driver`、`MINIDESK_DB_USERNAME`、
+`MINIDESK_DB_PASSWORD`、`MINIDESK_DB_INIT_SQL=SET NAMES utf8mb4`、
+`MINIDESK_DB_SCHEMA=classpath:db/schema-mysql.sql`。方言在启动时按 JDBC 元数据自动识别，
+旧 SQLite 数据可用 `scripts/migrate_sqlite_to_mysql.py` 一次性迁移，步骤见
+[部署指南 §4.10](docs/部署指南.md)。数据库密码只放服务器本地 `.env`，不进仓库、不进镜像。
+
+网盘存储同样在界面「网盘 → 存储设置」里配置，无需环境变量：默认写
+`${MINIDESK_DATA_DIR}/drive/`，切到 S3 兼容对象存储时填写 Endpoint / Bucket / Region /
+Access Key / Secret Key 等，Secret Key 以 AES-GCM 加密入库，接口只回显掩码；
+配置完可点「测试连接」做一次 PUT / GET / DELETE 自检。生产环境请把 `data/`
+整目录挂载到持久卷，详见 [部署指南](docs/部署指南.md)。
 
 ## 目录结构
 
@@ -164,7 +186,7 @@ minidesk/
 │   ├── src/app/              # 路由、守卫、应用入口
 │   ├── src/core/             # 请求封装、Pinia stores、主题目录
 │   ├── src/layouts/          # 主布局与后台布局
-│   ├── src/features/         # 按业务域划分的页面（work / study / life / console ...）
+│   ├── src/features/         # 按业务域划分的页面（work / study / life / bookmark / drive / console ...）
 │   ├── src/shared/           # 通用组件（MarkdownEditor、ThemePicker ...）
 │   └── src/styles/           # 主题变量与 Element Plus 覆盖
 ├── backend/                  # Spring Boot 3 后端
@@ -173,7 +195,7 @@ minidesk/
 │   │   ├── config/           # MyBatis-Plus、Sa-Token 配置
 │   │   ├── framework/        # 租户、加密、数据库升级、审计切面
 │   │   ├── bootstrap/        # 启动种子数据
-│   │   └── modules/          # 按业务域划分（含 system/schedule、system/backup）
+│   │   └── modules/          # 按业务域划分（含 common/bookmark、drive、system/schedule、system/backup）
 │   └── src/main/resources/db/# SQLite / MySQL / PostgreSQL 建表 SQL
 ├── docs/                     # 设计文档、接口清单、部署指南、截图
 ├── scripts/gen_schema.py     # 由 SQLite schema 生成 MySQL / PostgreSQL DDL
@@ -189,16 +211,16 @@ minidesk/
 | --- | --- |
 | [文档索引](docs/README.md) | 各文档的用途与「设计蓝图 / 已实现」状态说明 |
 | [开发总纲](docs/MiniDesk开发文档.md) | 产品决策、信息架构、功能矩阵、前后端规范、部署与风险 |
-| [数据库设计](docs/数据库设计.md) | 60 张表的字段、索引与隔离约定 |
+| [数据库设计](docs/数据库设计.md) | 64 张表的字段、索引与隔离约定 |
 | [接口清单](docs/接口清单.md) | 全部 REST 接口、请求响应体、权限码 |
 | [部署指南](docs/部署指南.md) | 本地开发、分离/单 Jar 部署、备份恢复、任务运维与 FAQ |
 | [AGENTS.md](AGENTS.md) | 编码规范、门禁、提交规范、常见任务配方 |
 
 ## 路线图
 
-已交付：Quartz 持久化调度、备份恢复、审计 AOP、单 Jar 内置静态资源、移动端专属导航（详见 [CHANGELOG.md](CHANGELOG.md)）。
+已交付：Quartz 持久化调度、备份恢复、审计 AOP、单 Jar 内置静态资源、移动端专属导航、网站导航与网盘、MySQL 8 运行时与旧库迁移（详见 [CHANGELOG.md](CHANGELOG.md)）。
 
-- **v0.2**：MySQL / PostgreSQL 运行时适配（驱动、方言、幂等升级）、离线图标包、自动化测试。
+- **v0.2**：PostgreSQL 运行时适配、离线图标包、自动化测试。
 - **v1.0**：Tauri 桌面端、数据导入导出、逐页视觉打磨、集群调度。
 
 ## 贡献

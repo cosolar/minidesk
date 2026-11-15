@@ -2,6 +2,7 @@ package cn.minims.desk.modules.work.project.mapper;
 
 import cn.minims.desk.modules.work.project.entity.ProjectDO;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.apache.ibatis.annotations.Param;
@@ -18,10 +19,11 @@ public interface ProjectMapper extends BaseMapper<ProjectDO> {
             """)
     List<Map<String, Object>> countTasksByStatus();
 
+    /** 今天由调用方传入，避免在 SQL 里写 SQLite 专属的 date('now')。 */
     @Select("""
             select count(*) from task
             where deleted = 0 and project_id = #{projectId}
-              and status <> 'done' and due_date is not null and due_date < date('now')
+              and status <> 'done' and due_date is not null and due_date < #{today}
             """)
-    long countOverdue(@Param("projectId") Long projectId);
+    long countOverdue(@Param("projectId") Long projectId, @Param("today") LocalDate today);
 }

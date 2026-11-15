@@ -128,7 +128,8 @@ watch(token, load)
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  padding: 22px 20px 30px;
+  min-height: 100dvh;
+  padding: 22px clamp(20px, 3vw, 40px) 30px;
   background: var(--bg-page);
 }
 
@@ -137,8 +138,7 @@ watch(token, load)
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  max-width: 860px;
-  margin: 0 auto 18px;
+  margin: 0 0 18px;
 }
 
 .share-top__tag {
@@ -151,8 +151,6 @@ watch(token, load)
 
 .share-main {
   width: 100%;
-  max-width: 860px;
-  margin: 0 auto;
   flex: 1;
 }
 

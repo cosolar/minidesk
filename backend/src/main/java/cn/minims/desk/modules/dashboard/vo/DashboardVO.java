@@ -17,7 +17,8 @@ public record DashboardVO(
         Counters counters,
         boolean partial
 ) {
-    public record WeatherBlock(int temp, String text, String city, boolean isMock) {
+    /** source：cma / open-meteo / mock，便于前端标注数据来源 */
+    public record WeatherBlock(int temp, String text, String city, boolean isMock, String source) {
     }
 
     public record TodoBlock(long total, long done, List<TaskVO> items) {

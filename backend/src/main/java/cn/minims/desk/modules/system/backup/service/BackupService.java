@@ -2,6 +2,8 @@ package cn.minims.desk.modules.system.backup.service;
 
 import cn.minims.desk.common.api.ErrorCode;
 import cn.minims.desk.common.exception.BizException;
+import cn.minims.desk.framework.db.DbDialect;
+import cn.minims.desk.framework.db.LogicalDatabaseBackup;
 import cn.minims.desk.modules.system.backup.vo.BackupVO;
 import java.io.IOException;
 import java.io.InputStream;
@@ -28,12 +30,13 @@ import org.springframework.web.multipart.MultipartFile;
 /**
  * 备份与恢复。
  *
- * <p>快照用 SQLite 的 {@code VACUUM INTO}：它在数据库内部生成一份事务一致、不含 WAL 的
- * 完整副本，运行中的应用无需停写，也不必手工拼接 -wal/-shm。ZIP 里另外带上附件、
- * 品牌资源和集成加密主密钥，缺任何一样恢复后都会出现文件打不开或密钥解不开。
+ * <p>SQLite 用 {@code VACUUM INTO} 生成事务一致、不含 WAL 的完整库文件；MySQL 改为
+ * {@link LogicalDatabaseBackup} 导出 JSONL 逻辑快照。ZIP 里另外带上附件、品牌资源和
+ * 集成加密主密钥，缺任何一样恢复后都会出现文件打不开或密钥解不开。
  *
- * <p>恢复不在运行期替换数据库文件（连接池仍持有旧句柄）。上传包先落成 pending，
- * 由 {@link cn.minims.desk.modules.system.backup.RestoreBootstrap} 在 Spring 启动前应用。
+ * <p>恢复不在运行期替换数据库文件（连接池仍持有旧句柄）。上传包先落成 pending：
+ * SQLite 由 {@link cn.minims.desk.modules.system.backup.RestoreBootstrap} 在 Spring 启动前应用，
+ * MySQL 由 {@link cn.minims.desk.modules.system.backup.MysqlRestoreRunner} 在容器就绪后应用。
  */
 @Service
 public class BackupService {
@@ -46,12 +49,16 @@ public class BackupService {
     private static final long MAX_UPLOAD_BYTES = 512L * 1024 * 1024;
 
     private final JdbcTemplate jdbc;
+    private final DbDialect dialect;
+    private final LogicalDatabaseBackup logicalBackup;
 
     @Value("${minidesk.data-dir:./data}")
     private String dataDir;
 
-    public BackupService(JdbcTemplate jdbc) {
+    public BackupService(JdbcTemplate jdbc, DbDialect dialect, LogicalDatabaseBackup logicalBackup) {
         this.jdbc = jdbc;
+        this.dialect = dialect;
+        this.logicalBackup = logicalBackup;
     }
 
     /** 生成一份完整快照，并把记录写进 backup_record。 */
@@ -73,18 +80,24 @@ public class BackupService {
                     fileName, triggerBy, now);
 
             work = Files.createTempDirectory(backups, ".building-");
-            Path snapshot = work.resolve("minidesk.db");
-            // VACUUM INTO 不支持绑定参数；路径全部由本方法生成，只需转义单引号
-            String literal = snapshot.toAbsolutePath().toString().replace("'", "''");
-            jdbc.execute("VACUUM INTO '" + literal + "'");
+            boolean sqlite = dialect.isSqlite();
+            Path snapshot = work.resolve(sqlite ? "minidesk.db" : "database.jsonl");
+            if (sqlite) {
+                // VACUUM INTO 不支持绑定参数；路径全部由本方法生成，只需转义单引号
+                String literal = snapshot.toAbsolutePath().toString().replace("'", "''");
+                jdbc.execute("VACUUM INTO '" + literal + "'");
+            } else {
+                Files.writeString(snapshot, logicalBackup.dump(), StandardCharsets.UTF_8);
+            }
 
             boolean hasSecret = Files.isRegularFile(root.resolve(".secret"));
             boolean hasBranding = Files.isDirectory(root.resolve("branding"));
             boolean hasUploads = Files.isDirectory(root.resolve("uploads"));
             try (ZipOutputStream out = new ZipOutputStream(Files.newOutputStream(zip,
                     StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE))) {
-                writeText(out, "manifest.json", manifest(now, triggerBy, hasSecret, hasUploads, hasBranding));
-                writeFile(out, "minidesk.db", snapshot);
+                writeText(out, "manifest.json",
+                        manifest(now, triggerBy, hasSecret, hasUploads, hasBranding, sqlite));
+                writeFile(out, sqlite ? "minidesk.db" : "database.jsonl", snapshot);
                 if (hasSecret) {
                     writeFile(out, ".secret", root.resolve(".secret"));
                 }
@@ -258,9 +271,10 @@ public class BackupService {
     }
 
     private static String manifest(String now, String triggerBy, boolean secret,
-                                   boolean uploads, boolean branding) {
+                                   boolean uploads, boolean branding, boolean sqlite) {
         return "{\"product\":\"MiniDesk\",\"schemaVersion\":1,\"createdAt\":\"" + now
-                + "\",\"triggerBy\":\"" + triggerBy + "\",\"database\":\"minidesk.db\""
+                + "\",\"triggerBy\":\"" + triggerBy + "\",\"database\":\""
+                + (sqlite ? "minidesk.db" : "database.jsonl") + "\""
                 + ",\"includesSecret\":" + secret + ",\"includesUploads\":" + uploads
                 + ",\"includesBranding\":" + branding + "}";
     }

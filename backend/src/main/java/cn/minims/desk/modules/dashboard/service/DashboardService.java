@@ -67,7 +67,8 @@ public class DashboardService {
 
         return new DashboardVO(
                 weather == null ? null
-                        : new DashboardVO.WeatherBlock(weather.temp(), weather.text(), weather.city(), weather.isMock()),
+                        : new DashboardVO.WeatherBlock(weather.temp(), weather.text(), weather.city(),
+                                weather.isMock(), weather.source()),
                 new DashboardVO.TodoBlock(todos.size(), done, todos.stream().limit(TODO_PREVIEW).toList()),
                 study,
                 logs.stream().map(this::toLifeItem).toList(),

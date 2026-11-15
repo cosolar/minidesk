@@ -20,6 +20,8 @@ export interface TestResult {
   message: string
   temp?: number
   text?: string
+  /** 实际生效的数据源：cma / open-meteo / mock */
+  source: string
 }
 
 export const settingsApi = {

@@ -353,6 +353,7 @@ async function onSubmit(): Promise<void> {
 .register {
   @include flex-center;
   min-height: 100vh;
+  min-height: 100dvh;
   padding: 32px 20px;
   background:
     radial-gradient(900px 420px at 12% 8%, var(--brand-100), transparent 60%),

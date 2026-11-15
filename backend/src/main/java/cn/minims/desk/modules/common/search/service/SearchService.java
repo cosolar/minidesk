@@ -1,5 +1,6 @@
 package cn.minims.desk.modules.common.search.service;
 
+import cn.minims.desk.framework.db.DbDialect;
 import cn.minims.desk.framework.tenant.TenantContext;
 import cn.minims.desk.modules.common.search.vo.SearchResultVO;
 import java.util.ArrayList;
@@ -24,9 +25,11 @@ public class SearchService {
     private static final int PER_GROUP = 6;
 
     private final JdbcTemplate jdbcTemplate;
+    private final DbDialect dialect;
 
-    public SearchService(JdbcTemplate jdbcTemplate) {
+    public SearchService(JdbcTemplate jdbcTemplate, DbDialect dialect) {
         this.jdbcTemplate = jdbcTemplate;
+        this.dialect = dialect;
     }
 
     public SearchResultVO search(String keyword) {
@@ -81,9 +84,12 @@ public class SearchService {
                         + "order by meeting_date desc limit " + PER_GROUP,
                 like, like), "/work/meeting");
 
+        // MySQL 的 || 是逻辑或，字符串拼接必须按方言生成
+        String contactBody = dialect.concat(
+                "coalesce(company, '')", "' '", "coalesce(phone, '')", "' '", "coalesce(wechat, '')");
         add(groups, "contact", "联系人", query(userId,
                 "select id, name as title, "
-                        + "trim(coalesce(company, '') || ' ' || coalesce(phone, '') || ' ' || coalesce(wechat, '')) as body, "
+                        + "trim(" + contactBody + ") as body, "
                         + "coalesce(birthday, '') as meta from contact "
                         + "where user_id = ? and deleted = 0 "
                         + "and (name like ? or company like ? or phone like ? or wechat like ?) "
