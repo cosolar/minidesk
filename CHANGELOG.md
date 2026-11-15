@@ -5,6 +5,31 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-15
+
+### Added
+
+- Note library: the notes page is now a document tree with work / study / life as
+  fixed roots and unlimited nested folders (`note_folder`). Notes can be created
+  inside a folder, renamed, moved by drag-and-drop or the "move to" dialog, and
+  deleting a folder sends its notes to the recycle bin. Folders keep the plain
+  list and the recycled notes visible through `/notes/outline`.
+- Bookmark page redesign: a photo hero with the page title and a Ctrl+K search
+  field, a glass statistics strip, pinned favourites, most-visited
+  recommendations and pastel category tiles, so the navigation page follows the
+  same design language as the dashboard.
+
+### Fixed
+
+- Markdown preview now keeps single line breaks inside a paragraph, matching what
+  the editor shows.
+
+### Changed
+
+- The dashboard weather follows the city saved in personal preferences instead of
+  always querying the default city, and the settings connectivity test reports
+  which city was actually queried.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added
