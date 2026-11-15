@@ -234,11 +234,25 @@ jobs:
 
       # 服务器的 compose / entrypoint / 文档是源码的一部分，跟随 main 更新；
       # deploy/.env 被 .gitignore 忽略，本地写入的密钥与数据库凭据不会被覆盖。
+      # 这里同步的只有 compose / entrypoint / 文档，和镜像本身无关；服务器偶发拉不到
+      # GitHub（或检出被容器写过导致 dubious ownership）时，不应该连带跳过落地发布，
+      # 所以失败只告警、重试三次，并打印 git 诊断信息，后续的滚动重启照常执行。
       - name: Sync the deployment checkout
+        continue-on-error: true
         run: |
           ssh -p "$DEPLOY_PORT" -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
-            "cd '$DEPLOY_PATH' && git fetch origin main && git pull --ff-only origin main"
+            "cd '$DEPLOY_PATH'; \
+             git config --global --add safe.directory '$DEPLOY_PATH' >/dev/null 2>&1 || true; \
+             if [ ! -d .git ]; then echo 'not a git checkout, skipping sync'; exit 0; fi; \
+             for i in 1 2 3; do \
+               if git fetch origin main && git merge --ff-only origin/main; then \
+                 echo \"checkout synced, head=\$(git rev-parse --short HEAD)\"; exit 0; \
+               fi; \
+               echo \"sync attempt \$i failed, retrying\"; sleep 5; \
+             done; \
+             echo 'sync failed, keeping the existing compose files'; \
+             git status --short; git rev-parse --short HEAD; git remote -v; exit 1"
 
       - name: Roll the container on the server
         run: |
