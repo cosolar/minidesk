@@ -13,7 +13,7 @@
 
   <groupId>cn.minims</groupId>
   <artifactId>desk</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
   <name>minidesk</name>
   <description>MiniDesk 极简工作台 · 后端</description>
 
