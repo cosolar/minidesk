@@ -7,6 +7,7 @@ import cn.minims.desk.framework.satoken.PermissionCodes;
 import cn.minims.desk.modules.note.dto.NoteSaveDTO;
 import cn.minims.desk.modules.note.service.NoteService;
 import cn.minims.desk.modules.note.vo.NoteDetailVO;
+import cn.minims.desk.modules.note.vo.NoteRecycleBoard;
 import cn.minims.desk.modules.note.vo.NoteSummaryVO;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -74,5 +75,32 @@ public class NoteController {
     public Result<Void> delete(@PathVariable Long id) {
         noteService.delete(id);
         return Result.ok();
+    }
+
+    /** 回收站列表；keepDays 由后台 note_recycle_days 决定 */
+    @GetMapping("/recycle")
+    public Result<NoteRecycleBoard> recycle() {
+        return Result.ok(noteService.recycle());
+    }
+
+    @PostMapping("/{id}/restore")
+    @SaCheckPermission(PermissionCodes.NOTE_MANAGE)
+    public Result<Void> restore(@PathVariable Long id) {
+        noteService.restore(id);
+        return Result.ok();
+    }
+
+    /** 彻底删除单篇，不可恢复 */
+    @DeleteMapping("/{id}/purge")
+    @SaCheckPermission(PermissionCodes.NOTE_MANAGE)
+    public Result<Void> purge(@PathVariable Long id) {
+        noteService.purge(id);
+        return Result.ok();
+    }
+
+    @DeleteMapping("/recycle")
+    @SaCheckPermission(PermissionCodes.NOTE_MANAGE)
+    public Result<Map<String, Integer>> clearRecycle() {
+        return Result.ok(Map.of("removed", noteService.clearRecycle()));
     }
 }

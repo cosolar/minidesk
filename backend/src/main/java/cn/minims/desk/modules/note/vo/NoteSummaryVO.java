@@ -25,7 +25,7 @@ public record NoteSummaryVO(
         return new NoteSummaryVO(
                 String.valueOf(note.getId()),
                 note.getTitle(),
-                excerpt(note.getContent(), note.getTitle()),
+                excerptOf(note.getContent(), note.getTitle()),
                 note.getModule(),
                 note.getType(),
                 note.getTags(),
@@ -36,7 +36,7 @@ public record NoteSummaryVO(
     }
 
     /** 列表卡片用：剥掉 Markdown 标记、标题行与代码块，压成一行短摘要 */
-    private static String excerpt(String content, String title) {
+    public static String excerptOf(String content, String title) {
         if (!StringUtils.hasText(content)) {
             return "";
         }

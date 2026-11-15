@@ -7,7 +7,9 @@ import cn.minims.desk.modules.note.dto.NoteSaveDTO;
 import cn.minims.desk.modules.note.entity.NoteDO;
 import cn.minims.desk.modules.note.mapper.NoteMapper;
 import cn.minims.desk.modules.note.vo.NoteDetailVO;
+import cn.minims.desk.modules.note.vo.NoteRecycleBoard;
 import cn.minims.desk.modules.note.vo.NoteSummaryVO;
+import cn.minims.desk.modules.system.mapper.SysConfigMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -24,9 +26,15 @@ import org.springframework.util.StringUtils;
 public class NoteService {
 
     private final NoteMapper noteMapper;
+    private final SysConfigMapper configMapper;
 
-    public NoteService(NoteMapper noteMapper) {
+    /** 回收站默认保留天数；后台可通过 note_recycle_days 覆盖 */
+    private static final String CONFIG_RECYCLE_DAYS = "note_recycle_days";
+    private static final int DEFAULT_RECYCLE_DAYS = 30;
+
+    public NoteService(NoteMapper noteMapper, SysConfigMapper configMapper) {
         this.noteMapper = noteMapper;
+        this.configMapper = configMapper;
     }
 
     public PageResult<NoteSummaryVO> page(String module, String type, String keyword, long pageNo, long pageSize) {
@@ -104,10 +112,46 @@ public class NoteService {
         noteMapper.updateById(note);
     }
 
+    /** 删除 = 移入回收站，保留正文与删除时间，到期由定时任务彻底删除 */
     @Transactional(rollbackFor = Exception.class)
     public void delete(Long id) {
         require(id);
-        noteMapper.deleteById(id);
+        noteMapper.moveToRecycle(id, LocalDateTime.now());
+    }
+
+    public NoteRecycleBoard recycle() {
+        int keepDays = recycleKeepDays();
+        return NoteRecycleBoard.of(keepDays, noteMapper.selectRecycled());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void restore(Long id) {
+        if (noteMapper.restore(id) == 0) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public void purge(Long id) {
+        if (noteMapper.purge(id) == 0) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public int clearRecycle() {
+        return noteMapper.purgeRecycled();
+    }
+
+    /** 后台配置 note_recycle_days；缺失或非法值退回默认 30 天 */
+    private int recycleKeepDays() {
+        try {
+            String value = configMapper.selectValue(CONFIG_RECYCLE_DAYS);
+            int days = value == null ? DEFAULT_RECYCLE_DAYS : Integer.parseInt(value.trim());
+            return Math.max(days, 1);
+        } catch (RuntimeException ex) {
+            return DEFAULT_RECYCLE_DAYS;
+        }
     }
 
     private NoteDO require(Long id) {

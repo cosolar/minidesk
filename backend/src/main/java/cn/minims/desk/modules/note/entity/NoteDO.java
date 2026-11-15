@@ -44,4 +44,7 @@ public class NoteDO {
 
     @TableLogic
     private Integer deleted;
+
+    /** 移入回收站的时间，null 表示没被删过；用于到期彻底删除 */
+    private LocalDateTime deletedAt;
 }

@@ -831,10 +831,12 @@ CREATE TABLE IF NOT EXISTS note (
   word_count INTEGER      NOT NULL DEFAULT 0,
   created_at DATETIME     NOT NULL,
   updated_at DATETIME     NOT NULL,
-  deleted    TINYINT      NOT NULL DEFAULT 0
+  deleted    TINYINT      NOT NULL DEFAULT 0,
+  deleted_at DATETIME                                   -- 移入回收站的时间，null 表示未删除
 );
 
 CREATE INDEX IF NOT EXISTS idx_note_user ON note(user_id, module, type, updated_at);
+-- idx_note_recycle 由 SchemaUpgrade 在补完 deleted_at 后创建：老库此时还没有该列
 
 -- 笔记分享：公开短链 /share/note/{token}，密码可选、有效期可空（空=永久）
 CREATE TABLE IF NOT EXISTS note_share (

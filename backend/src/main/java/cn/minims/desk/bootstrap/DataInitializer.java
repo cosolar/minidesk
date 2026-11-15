@@ -60,6 +60,7 @@ public class DataInitializer implements ApplicationRunner {
         insertConfig("login_fail_limit", "5", "登录失败锁定阈值", now);
         insertConfig("login_lock_minutes", "15", "锁定时长（分钟）", now);
         insertConfig("audit_keep_days", "180", "审计日志保留天数", now);
+        insertConfig("note_recycle_days", "30", "笔记回收站保留天数", now);
         insertConfig("backup_keep", "7", "备份保留份数", now);
 
         log.info("seed data ready");

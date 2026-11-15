@@ -44,7 +44,38 @@ public class SchemaUpgrade implements ApplicationRunner {
         ensureColumn("task", "start_date", "DATE");
         ensureColumn("task", "start_time", "VARCHAR(8)");
         ensureColumn("job_exec_log", "message", "VARCHAR(500)");
+        ensureColumn("note", "deleted_at", "DATETIME");
+        ensureIndex("note", "idx_note_recycle", "deleted, deleted_at");
+        // 本次改动之前软删除的笔记没有时间戳，用最后修改时间兜底，否则永远不会被清理
+        jdbcTemplate.update("update note set deleted_at = updated_at where deleted = 1 and deleted_at is null");
         migrateLegacyBookmarks();
+    }
+
+    /**
+     * 索引必须在补列之后建：建表脚本执行时老库还没有 deleted_at，
+     * 把 CREATE INDEX 写在 schema 里会让应用起不来。
+     */
+    private void ensureIndex(String table, String index, String columns) {
+        DataSource dataSource = jdbcTemplate.getDataSource();
+        if (dataSource == null) {
+            return;
+        }
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData meta = connection.getMetaData();
+            try (ResultSet rs = meta.getIndexInfo(connection.getCatalog(), null, table, false, true)) {
+                while (rs.next()) {
+                    String name = rs.getString("INDEX_NAME");
+                    if (name != null && name.equalsIgnoreCase(index)) {
+                        return;
+                    }
+                }
+            }
+            jdbcTemplate.execute("create index " + dialect.quote(index)
+                    + " on " + dialect.quote(table) + " (" + columns + ")");
+            log.info("schema upgrade: index {} added", index);
+        } catch (Exception ex) {
+            log.debug("schema upgrade: index {} skipped ({})", index, ex.getMessage());
+        }
     }
 
     /**

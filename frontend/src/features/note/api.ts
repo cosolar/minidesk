@@ -63,6 +63,23 @@ export interface PublicNote {
   updatedAt: string | null
 }
 
+export interface NoteRecycleItem {
+  id: string
+  title: string
+  excerpt: string
+  module: 'work' | 'study' | 'life'
+  wordCount: number
+  deletedAt: string | null
+  /** 距离自动彻底删除还剩几天，由后端按 note_recycle_days 计算 */
+  remainingDays: number
+}
+
+export interface NoteRecycleBoard {
+  /** 后台配置的保留天数，用于文案提示 */
+  keepDays: number
+  items: NoteRecycleItem[]
+}
+
 export const noteApi = {
   page(params: { module?: string; type?: string; keyword?: string; page?: number; size?: number }) {
     return http.get<NotePage>('/notes', params)
@@ -81,6 +98,18 @@ export const noteApi = {
   },
   remove(id: string) {
     return http.delete<void>(`/notes/${id}`)
+  },
+  recycle() {
+    return http.get<NoteRecycleBoard>('/notes/recycle')
+  },
+  restore(id: string) {
+    return http.post<void>(`/notes/${id}/restore`, {})
+  },
+  purge(id: string) {
+    return http.delete<void>(`/notes/${id}/purge`)
+  },
+  clearRecycle() {
+    return http.delete<{ removed: number }>('/notes/recycle')
   },
   getShare(id: string) {
     return http.get<NoteShare | null>(`/notes/${id}/share`)

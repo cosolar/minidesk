@@ -52,7 +52,9 @@ public class ScheduleService {
             new ScheduleVO.JobItem("autoBackup", "自动备份", "生成数据库与附件快照，并按保留份数清理旧备份",
                     "0 0 3 * * ?", true, true, 30, null, null, null, null, null),
             new ScheduleVO.JobItem("logCleanup", "日志清理", "按审计保留天数清理登录、操作、任务日志与已读通知",
-                    "0 0 4 1 * ?", true, true, 40, null, null, null, null, null));
+                    "0 0 4 1 * ?", true, true, 40, null, null, null, null, null),
+            new ScheduleVO.JobItem("noteRecyclePurge", "回收站清理", "彻底删除超过保留天数的回收站笔记",
+                    "0 30 4 * * ?", true, true, 50, null, null, null, null, null));
 
     private static final String JOB_COLUMNS = """
             job_code, job_name, description, cron_expr, enabled, allow_manual, sort_order,

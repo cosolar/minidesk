@@ -16,6 +16,7 @@ import {
   Notebook,
   Plus,
   Reading,
+  RefreshLeft,
   Search,
   Share,
   Star,
@@ -27,7 +28,14 @@ import dayjs from 'dayjs'
 import MarkdownEditor from '@/shared/components/MarkdownEditor.vue'
 import MarkdownPreview, { type MarkdownHeading } from '@/shared/components/MarkdownPreview.vue'
 import { useAppStore } from '@/core/stores/app'
-import { noteApi, type NoteShare, type NoteSharePayload, type NoteSummary } from '../api'
+import {
+  noteApi,
+  type NoteRecycleBoard,
+  type NoteRecycleItem,
+  type NoteShare,
+  type NoteSharePayload,
+  type NoteSummary,
+} from '../api'
 import { lifeLogApi, type LifeLog } from '@/features/life/lifelog/api'
 
 const route = useRoute()
@@ -57,6 +65,8 @@ const { width: viewportWidth } = useWindowSize()
 const editorMode = computed<'ir' | 'sv'>(() =>
   !appStore.isMobile && viewportWidth.value >= 1200 ? 'sv' : 'ir',
 )
+/** 抽屉固定 420px 在窄屏会从左侧溢出，小屏改成整屏宽 */
+const recycleDrawerSize = computed(() => (viewportWidth.value < 480 ? '100%' : '420px'))
 
 /** 统一笔记：工作记录 / 学习笔记 / 生活日记，日记读的是 life_log */
 const TABS = [
@@ -315,9 +325,9 @@ function goHeading(id: string): void {
 }
 
 async function confirmRemove(id: string, title: string): Promise<void> {
-  const confirmed = await ElMessageBox.confirm(`删除「${title || '无标题'}」？`, '确认删除', {
+  const confirmed = await ElMessageBox.confirm(`将「${title || '无标题'}」移入回收站？`, '移入回收站', {
     type: 'warning',
-    confirmButtonText: '删除',
+    confirmButtonText: '移入回收站',
     cancelButtonText: '取消',
   }).catch(() => false)
   if (!confirmed) {
@@ -331,7 +341,7 @@ async function confirmRemove(id: string, title: string): Promise<void> {
     mode.value = 'preview'
   }
   await queryClient.invalidateQueries({ queryKey: ['notes'] })
-  ElMessage.success('已删除')
+  ElMessage.success('已移入回收站，可在回收站恢复')
 }
 
 function removeNote(note: NoteSummary): void {
@@ -523,6 +533,80 @@ async function cancelShare(): Promise<void> {
   shareVisible.value = false
   ElMessage.success('已关闭分享')
 }
+
+/** 回收站：软删除的笔记保留 note_recycle_days 天，到期由定时任务彻底删除 */
+const recycleVisible = ref(false)
+const recycleLoading = ref(false)
+const recycleBoard = ref<NoteRecycleBoard>({ keepDays: 30, items: [] })
+const recycleBusy = ref('')
+
+async function loadRecycle(): Promise<void> {
+  recycleLoading.value = true
+  try {
+    recycleBoard.value = await noteApi.recycle()
+  } finally {
+    recycleLoading.value = false
+  }
+}
+
+function openRecycle(): void {
+  recycleVisible.value = true
+  void loadRecycle()
+}
+
+async function restoreRecycled(item: NoteRecycleItem): Promise<void> {
+  recycleBusy.value = item.id
+  try {
+    await noteApi.restore(item.id)
+    await Promise.all([
+      loadRecycle(),
+      queryClient.invalidateQueries({ queryKey: ['notes'] }),
+      queryClient.invalidateQueries({ queryKey: ['notes-overview'] }),
+    ])
+    ElMessage.success('已恢复到原分类')
+  } finally {
+    recycleBusy.value = ''
+  }
+}
+
+async function purgeRecycled(item: NoteRecycleItem): Promise<void> {
+  const confirmed = await ElMessageBox.confirm(
+    `彻底删除后无法恢复，「${item.title || '无标题'}」确定删除？`,
+    '彻底删除',
+    { type: 'warning', confirmButtonText: '彻底删除', cancelButtonText: '取消' },
+  ).catch(() => false)
+  if (!confirmed) {
+    return
+  }
+  recycleBusy.value = item.id
+  try {
+    await noteApi.purge(item.id)
+    await loadRecycle()
+    ElMessage.success('已彻底删除')
+  } finally {
+    recycleBusy.value = ''
+  }
+}
+
+async function clearRecycled(): Promise<void> {
+  const total = recycleBoard.value.items.length
+  const confirmed = await ElMessageBox.confirm(
+    `回收站里 ${total} 篇笔记会被永久删除，无法恢复。`,
+    '清空回收站',
+    { type: 'warning', confirmButtonText: '全部删除', cancelButtonText: '取消' },
+  ).catch(() => false)
+  if (!confirmed) {
+    return
+  }
+  recycleBusy.value = 'all'
+  try {
+    const result = await noteApi.clearRecycle()
+    await loadRecycle()
+    ElMessage.success(`已彻底删除 ${result.removed} 篇`)
+  } finally {
+    recycleBusy.value = ''
+  }
+}
 </script>
 
 <template>
@@ -537,11 +621,18 @@ async function cancelShare(): Promise<void> {
               <small>{{ overviewNotes.length }} 篇 · {{ formatWords(totalWords) }}</small>
             </span>
           </div>
-          <el-tooltip :content="isDiary ? '去写日记' : '新建笔记'" placement="left">
-            <button type="button" class="note-create" aria-label="新建" @click="onCreate">
-              <el-icon><Plus /></el-icon>
-            </button>
-          </el-tooltip>
+          <div class="note-side__actions">
+            <el-tooltip content="回收站" placement="left">
+              <button type="button" class="note-recycle" aria-label="回收站" @click="openRecycle">
+                <el-icon><Delete /></el-icon>
+              </button>
+            </el-tooltip>
+            <el-tooltip :content="isDiary ? '去写日记' : '新建笔记'" placement="left">
+              <button type="button" class="note-create" aria-label="新建" @click="onCreate">
+                <el-icon><Plus /></el-icon>
+              </button>
+            </el-tooltip>
+          </div>
         </header>
 
         <div class="note-filters" role="tablist" aria-label="笔记分类">
@@ -915,6 +1006,68 @@ async function cancelShare(): Promise<void> {
         </el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-model="recycleVisible" title="回收站" :size="recycleDrawerSize" class="recycle-drawer">
+      <div class="recycle">
+        <div class="recycle__head">
+          <p>
+            删除的笔记会保留 <strong>{{ recycleBoard.keepDays }}</strong> 天，到期自动彻底删除。
+          </p>
+          <el-button
+            v-if="recycleBoard.items.length"
+            size="small"
+            text
+            type="danger"
+            :loading="recycleBusy === 'all'"
+            @click="clearRecycled"
+          >
+            清空回收站
+          </el-button>
+        </div>
+
+        <el-skeleton v-if="recycleLoading" :rows="5" animated />
+        <div v-else-if="!recycleBoard.items.length" class="recycle__empty">
+          <span class="recycle__empty-art"><el-icon><Delete /></el-icon></span>
+          <strong>回收站是空的</strong>
+          <p>删掉的笔记会先放到这里，{{ recycleBoard.keepDays }} 天内都可以恢复。</p>
+        </div>
+        <ul v-else class="recycle__list">
+          <li v-for="item in recycleBoard.items" :key="item.id" class="recycle-item">
+            <div class="recycle-item__top">
+              <span class="recycle-item__title">{{ item.title || '无标题' }}</span>
+              <span class="recycle-item__days">剩 {{ item.remainingDays }} 天</span>
+            </div>
+            <p class="recycle-item__excerpt">{{ item.excerpt || '空白笔记' }}</p>
+            <div class="recycle-item__meta">
+              <span>{{ moduleLabel(item.module) }}</span>
+              <i class="recycle-item__dot" />
+              <span>{{ formatWords(item.wordCount) }}</span>
+              <span class="recycle-item__time">{{ relative(item.deletedAt || '') }}删除</span>
+            </div>
+            <div class="recycle-item__actions">
+              <el-button
+                size="small"
+                :icon="RefreshLeft"
+                :loading="recycleBusy === item.id"
+                @click="restoreRecycled(item)"
+              >
+                恢复
+              </el-button>
+              <el-button
+                size="small"
+                text
+                type="danger"
+                :icon="Delete"
+                :disabled="recycleBusy === item.id"
+                @click="purgeRecycled(item)"
+              >
+                彻底删除
+              </el-button>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -927,11 +1080,15 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   grid-template-columns: 292px minmax(0, 1fr);
   // 高度完全交给外层内容区（grid 1fr）分配，两列各自内部滚动，
   // 不再用 calc(100vh - Npx) 猜顶栏高度，底部就不会留空白。
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   min-height: 0;
 
   @include respond-below(md) {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    height: auto;
     gap: 10px;
     min-height: 0;
   }
@@ -1042,6 +1199,203 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   &:active {
     transform: translateY(0);
   }
+}
+
+.note-side__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-recycle {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    color $duration-fast $ease-out,
+    border-color $duration-fast $ease-out,
+    background-color $duration-fast $ease-out;
+
+  &:hover {
+    color: var(--brand-600);
+    border-color: color-mix(in srgb, var(--brand-400) 55%, var(--border-color));
+    background: var(--bg-card);
+  }
+}
+
+// ---------- 回收站抽屉 ----------
+.recycle-drawer {
+  /* 420px 在 390px 窄屏上会横向溢出，按视口收口 */
+  max-width: 100vw;
+
+  :deep(.el-drawer__header) {
+    margin-bottom: 0;
+    padding: 18px 20px 14px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  :deep(.el-drawer__body) {
+    padding: 16px 18px 20px;
+    background: var(--bg-page);
+  }
+}
+
+.recycle {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+.recycle__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  background: var(--bg-subtle);
+
+  p {
+    color: var(--text-secondary);
+    font-size: 12px;
+
+    strong {
+      color: var(--brand-600);
+    }
+  }
+}
+
+.recycle__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 54px 16px;
+  border: 1px dashed var(--border-color);
+  border-radius: $radius-lg;
+  background: var(--bg-card);
+  text-align: center;
+
+  strong {
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  p {
+    max-width: 240px;
+    color: var(--text-tertiary);
+    font-size: 12px;
+  }
+}
+
+.recycle__empty-art {
+  @include flex-center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brand-100) 70%, transparent);
+  color: var(--brand-600);
+  font-size: 20px;
+}
+
+.recycle__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recycle-item {
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  background: var(--bg-card);
+  transition:
+    border-color $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--brand-300) 60%, var(--border-color));
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--brand-700) 8%, transparent);
+  }
+}
+
+.recycle-item__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recycle-item__title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recycle-item__days {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-100) 80%, transparent);
+  color: var(--brand-700);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.recycle-item__excerpt {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.recycle-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.recycle-item__dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentcolor;
+  opacity: 0.5;
+}
+
+.recycle-item__time {
+  margin-left: auto;
+}
+
+.recycle-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
 }
 
 // 分类筛选：2×2 彩色卡片，比原来的等分文字条更清晰
@@ -1783,6 +2137,8 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  // 行高必须受限，否则预览正文会把整页撑高、doc-scroll 自己的滚动条不生效
+  grid-template-rows: minmax(0, 1fr);
 
   &.has-outline {
     grid-template-columns: minmax(0, 1fr) 196px;

@@ -89,6 +89,7 @@ public class ScheduleTaskRunner {
             case "journalDraft" -> generateJournalDrafts();
             case "autoBackup" -> autoBackup();
             case "logCleanup" -> cleanupLogs();
+            case "noteRecyclePurge" -> purgeNoteRecycle();
             default -> throw new BizException(ErrorCode.JOB_NOT_FOUND);
         };
     }
@@ -223,6 +224,15 @@ public class ScheduleTaskRunner {
         int notice = jdbc.update("delete from notification where read_flag = 1 and created_at < ?", cutoff);
         return "清理 " + (login + oper + job + notice) + " 条（登录 " + login + " / 操作 " + oper
                 + " / 任务 " + job + " / 通知 " + notice + "），保留近 " + keepDays + " 天";
+    }
+
+    /** 按 note_recycle_days 彻底删除过期的回收站笔记，跨用户执行。 */
+    private String purgeNoteRecycle() {
+        int keepDays = Math.max(configInt("note_recycle_days", 30), 1);
+        String cutoff = LocalDateTime.now().minusDays(keepDays).format(DATETIME);
+        int removed = jdbc.update(
+                "delete from note where deleted = 1 and deleted_at is not null and deleted_at < ?", cutoff);
+        return "彻底删除回收站笔记 " + removed + " 篇（保留近 " + keepDays + " 天）";
     }
 
     private int configInt(String key, int fallback) {

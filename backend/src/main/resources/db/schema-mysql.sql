@@ -6,10 +6,9 @@
 --   CREATE DATABASE minidesk DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 -- Apply:
 --   mysql -u root -p minidesk < schema-mysql.sql
--- Runtime note: SQLite is the local default. Production switches the datasource
---   URL, driver, connection-init-sql and this schema file via deploy/.env;
---   the JDBC driver is bundled and SQL dialect is detected at startup.
---   See docs/部署指南.md.
+-- Runtime note: the app boots on SQLite by default. Switching to MySQL also
+--   requires the JDBC driver, a datasource profile and dialect-safe seed SQL
+--   (see docs/部署指南.md).
 
 CREATE TABLE IF NOT EXISTS `sys_user` (
   `id` BIGINT NOT NULL AUTO_INCREMENT,
@@ -827,6 +826,7 @@ CREATE TABLE IF NOT EXISTS `note` (
   `created_at` DATETIME NOT NULL,
   `updated_at` DATETIME NOT NULL,
   `deleted` TINYINT NOT NULL DEFAULT 0,
+  `deleted_at` DATETIME,  -- 移入回收站的时间，null 表示未删除
   PRIMARY KEY (`id`),
   KEY `idx_note_user` (`user_id`, `module`, `type`, `updated_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -948,54 +948,53 @@ CREATE TABLE IF NOT EXISTS `sys_schedule_job` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_schedule_job` (`job_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
--- ==================== 网站导航（书签） ====================
+
 CREATE TABLE IF NOT EXISTS `bookmark_category` (
-  `id`         BIGINT NOT NULL AUTO_INCREMENT,
-  `user_id`    BIGINT NOT NULL,
-  `name`       VARCHAR(64) NOT NULL,
-  `icon`       VARCHAR(64) NOT NULL DEFAULT 'folder',
-  `color`      VARCHAR(16) NOT NULL DEFAULT '#0B7D77',
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `name` VARCHAR(64) NOT NULL,
+  `icon` VARCHAR(64) NOT NULL DEFAULT 'folder',
+  `color` VARCHAR(16) NOT NULL DEFAULT '#0B7D77',
   `sort_order` INT NOT NULL DEFAULT 0,
   `created_at` DATETIME NOT NULL,
   `updated_at` DATETIME NOT NULL,
-  `deleted`    TINYINT NOT NULL DEFAULT 0,
+  `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_bookmark_category_user` (`user_id`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `bookmark_site` (
-  `id`          BIGINT NOT NULL AUTO_INCREMENT,
-  `user_id`     BIGINT NOT NULL,
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
   `category_id` BIGINT NOT NULL DEFAULT 0,
-  `name`        VARCHAR(120) NOT NULL,
-  `url`         VARCHAR(1000) NOT NULL,
+  `name` VARCHAR(120) NOT NULL,
+  `url` VARCHAR(1000) NOT NULL,
   `description` VARCHAR(255),
-  `icon`        VARCHAR(500),
-  `color`       VARCHAR(16),
+  `icon` VARCHAR(500),
+  `color` VARCHAR(16),
   `click_count` INT NOT NULL DEFAULT 0,
-  `pinned`      TINYINT NOT NULL DEFAULT 0,
-  `sort_order`  INT NOT NULL DEFAULT 0,
-  `created_at`  DATETIME NOT NULL,
-  `updated_at`  DATETIME NOT NULL,
-  `deleted`     TINYINT NOT NULL DEFAULT 0,
+  `pinned` TINYINT NOT NULL DEFAULT 0,
+  `sort_order` INT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL,
+  `updated_at` DATETIME NOT NULL,
+  `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_bookmark_site_user` (`user_id`, `category_id`, `sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ==================== 网盘文件 ====================
 CREATE TABLE IF NOT EXISTS `drive_file` (
-  `id`         BIGINT NOT NULL AUTO_INCREMENT,
-  `user_id`    BIGINT NOT NULL,
-  `parent_id`  BIGINT NOT NULL DEFAULT 0,
-  `name`       VARCHAR(255) NOT NULL,
-  `type`       VARCHAR(12) NOT NULL DEFAULT 'file',
-  `size`       BIGINT NOT NULL DEFAULT 0,
-  `mime`       VARCHAR(150),
-  `storage`    VARCHAR(12) NOT NULL DEFAULT 'local',
+  `id` BIGINT NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT NOT NULL,
+  `parent_id` BIGINT NOT NULL DEFAULT 0,  -- 0 = 根目录
+  `name` VARCHAR(255) NOT NULL,
+  `type` VARCHAR(12) NOT NULL DEFAULT 'file',  -- file / folder
+  `size` BIGINT NOT NULL DEFAULT 0,
+  `mime` VARCHAR(150),
+  `storage` VARCHAR(12) NOT NULL DEFAULT 'local',  -- local / s3
   `object_key` VARCHAR(600),
   `created_at` DATETIME NOT NULL,
   `updated_at` DATETIME NOT NULL,
-  `deleted`    TINYINT NOT NULL DEFAULT 0,
+  `deleted` TINYINT NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_drive_file_user` (`user_id`, `parent_id`, `type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
