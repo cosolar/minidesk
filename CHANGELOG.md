@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2026-11-17
+
+### Added
+
+- Lunar anniversaries: an anniversary can be recorded by lunar month / day and
+  rolls over each lunar year. The server uses `cn.6tail:lunar` and the browser
+  uses `lunar-javascript`, sharing the same rule, and cards show the lunar text
+  next to the solar date. When the 30th day falls in a 29-day lunar month it
+  lands on the 29th instead of disappearing for the whole year.
+- Note page header and article outline refreshed: breadcrumb navigation,
+  undo / redo while editing, and a collapsible outline with a watercolor
+  illustration.
+
+### Fixed
+
+- Past anniversaries show "N days ago" instead of a negative "N days later".
+- Lunar anniversaries that do not repeat yearly keep their original date instead
+  of rolling to the next lunar year.
+
 ## [0.4.1] - 2026-11-15
 
 ### Fixed
