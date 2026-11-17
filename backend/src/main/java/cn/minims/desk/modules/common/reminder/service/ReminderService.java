@@ -1,6 +1,7 @@
 package cn.minims.desk.modules.common.reminder.service;
 
 import cn.minims.desk.framework.tenant.TenantContext;
+import cn.minims.desk.modules.common.calendar.support.LunarSupport;
 import cn.minims.desk.modules.common.reminder.vo.ReminderVO;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -69,14 +70,23 @@ public class ReminderService {
             }
         }
 
-        // 3. 纪念日：一年一次的那类滚到下一次
+        // 3. 纪念日：一年一次的那类滚到下一次，农历纪念日按农历月日滚动
         for (Map<String, Object> row : jdbcTemplate.queryForList(
-                "select id, title, date, repeat_yearly from anniversary where user_id = ?",
+                "select id, title, date, repeat_yearly, lunar from anniversary where user_id = ?",
                 userId)) {
             LocalDate date = LocalDate.parse(String.valueOf(row.get("date")));
             boolean yearly = row.get("repeat_yearly") == null
                     || Integer.parseInt(String.valueOf(row.get("repeat_yearly"))) == 1;
-            LocalDate occur = yearly ? nextOccurrence(date, today) : date;
+            boolean lunar = row.get("lunar") != null
+                    && Integer.parseInt(String.valueOf(row.get("lunar"))) == 1;
+            LocalDate occur;
+            if (yearly && lunar) {
+                occur = LunarSupport.nextLunarOccurrence(date, today);
+            } else if (yearly) {
+                occur = nextOccurrence(date, today);
+            } else {
+                occur = date;
+            }
             long days = ChronoUnit.DAYS.between(today, occur);
             if (days >= 0 && days <= DAY_WINDOW) {
                 items.add(new ReminderVO("anniversary-" + row.get("id"), "anniversary",

@@ -12,7 +12,9 @@ public record AnniversaryVO(
         boolean repeatYearly,
         int advanceDays,
         String nextDate,
-        long daysLeft
+        long daysLeft,
+        boolean lunar,
+        String lunarText
 ) {
     public record CountdownVO(
             String id,

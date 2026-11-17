@@ -45,7 +45,10 @@ public class AnniversaryController {
                 ? null : Integer.valueOf(String.valueOf(body.get("advanceDays")));
         Boolean repeat = body.get("repeatYearly") == null
                 ? null : Boolean.valueOf(String.valueOf(body.get("repeatYearly")));
-        return Result.ok(anniversaryService.createAnniversary(title, type, person, date, advanceDays, repeat));
+        Boolean lunar = body.get("lunar") == null
+                ? null : Boolean.valueOf(String.valueOf(body.get("lunar")));
+        return Result.ok(anniversaryService.createAnniversary(
+                title, type, person, date, advanceDays, repeat, lunar));
     }
 
     @DeleteMapping("/anniversaries/{id}")

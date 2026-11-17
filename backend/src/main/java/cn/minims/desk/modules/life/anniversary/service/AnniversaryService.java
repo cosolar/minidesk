@@ -6,6 +6,7 @@ import cn.minims.desk.modules.common.calendar.entity.AnniversaryDO;
 import cn.minims.desk.modules.common.calendar.entity.CountdownDO;
 import cn.minims.desk.modules.common.calendar.mapper.AnniversaryMapper;
 import cn.minims.desk.modules.common.calendar.mapper.CountdownMapper;
+import cn.minims.desk.modules.common.calendar.support.LunarSupport;
 import cn.minims.desk.modules.life.anniversary.vo.AnniversaryVO;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import java.time.LocalDate;
@@ -37,7 +38,12 @@ public class AnniversaryService {
                         .orderByAsc(AnniversaryDO::getDate))
                 .stream()
                 .map(item -> {
-                    LocalDate next = nextOccurrence(item.getDate(), item.getRepeatYearly());
+                    boolean lunar = LunarSupport.isLunar(item.getLunar());
+                    boolean yearly = item.getRepeatYearly() != null && item.getRepeatYearly() == 1;
+                    // 只过一次的农历纪念日不滚动，只有每年重复才按农历月日找下一次
+                    LocalDate next = lunar && yearly
+                            ? LunarSupport.nextLunarOccurrence(item.getDate(), today)
+                            : nextOccurrence(item.getDate(), item.getRepeatYearly());
                     return new AnniversaryVO(
                             String.valueOf(item.getId()),
                             item.getTitle(),
@@ -47,7 +53,9 @@ public class AnniversaryService {
                             item.getRepeatYearly() != null && item.getRepeatYearly() == 1,
                             item.getAdvanceDays() == null ? 3 : item.getAdvanceDays(),
                             next.toString(),
-                            ChronoUnit.DAYS.between(today, next));
+                            ChronoUnit.DAYS.between(today, next),
+                            lunar,
+                            lunar ? LunarSupport.lunarText(item.getDate()) : null);
                 })
                 .sorted(Comparator.comparingLong(AnniversaryVO::daysLeft))
                 .toList();
@@ -70,7 +78,8 @@ public class AnniversaryService {
 
     @Transactional(rollbackFor = Exception.class)
     public AnniversaryVO createAnniversary(String title, String type, String person,
-                                          LocalDate date, Integer advanceDays, Boolean repeatYearly) {
+                                          LocalDate date, Integer advanceDays, Boolean repeatYearly,
+                                          Boolean lunar) {
         if (!StringUtils.hasText(title) || date == null) {
             throw new BizException(ErrorCode.PARAM_ERROR, "请填写名称与日期");
         }
@@ -79,7 +88,7 @@ public class AnniversaryService {
         item.setType(StringUtils.hasText(type) ? type : "birthday");
         item.setPerson(person);
         item.setDate(date);
-        item.setLunar(0);
+        item.setLunar(Boolean.TRUE.equals(lunar) ? 1 : 0);
         item.setRepeatYearly(Boolean.FALSE.equals(repeatYearly) ? 0 : 1);
         item.setAdvanceDays(advanceDays == null ? 3 : Math.max(advanceDays, 0));
         item.setCreatedAt(LocalDateTime.now());

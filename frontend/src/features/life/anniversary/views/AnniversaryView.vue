@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
+import { Lunar } from 'lunar-javascript'
 import { anniversaryApi } from '../api'
 
 const queryClient = useQueryClient()
@@ -32,6 +33,7 @@ const form = reactive({
   person: '',
   date: dayjs().format('YYYY-MM-DD'),
   advanceDays: 3,
+  lunar: false,
 })
 
 const rules: FormRules = {
@@ -45,9 +47,11 @@ const createAnniversary = useMutation({
       title: form.title.trim(),
       type: form.type,
       person: form.person || null,
-      date: form.date,
+      // 农历模式把所选的「月/日」当农历，换算成对应公历再提交，后端据此还原农历口径
+      date: form.lunar ? toSolarDate(form.date) : form.date,
       advanceDays: form.advanceDays,
       repeatYearly: form.type !== 'countdown',
+      lunar: form.lunar,
     }),
   onSuccess: () => {
     ElMessage.success('已添加')
@@ -72,6 +76,7 @@ function openDialog(target: 'anniversary' | 'countdown'): void {
   form.person = ''
   form.type = target === 'countdown' ? 'custom' : 'birthday'
   form.date = dayjs().format('YYYY-MM-DD')
+  form.lunar = false
   formRef.value?.clearValidate()
   dialogVisible.value = true
 }
@@ -131,6 +136,77 @@ function typeLabel(type: string): string {
   }
   return map[type] ?? '纪念'
 }
+
+/**
+ * 把「公历日期」的月/日直接当作农历的月/日解读，得到「农历六月十九」这类文案。
+ * 农历某月可能只有 29 天（如 2026 腊月无三十），换一年再算；文案与年份无关。
+ */
+function lunarLabel(dateStr: string): string {
+  const [year = 0, month = 0, day = 0] = dateStr.split('-').map(Number)
+  if (!year || !month || !day) {
+    return ''
+  }
+  for (let offset = 0; offset < 5; offset += 1) {
+    try {
+      const lunar = Lunar.fromYmd(year + offset, month, day)
+      return `农历${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}`
+    } catch {
+      // 该农历年份此月没有这一天，继续尝试下一年
+    }
+  }
+  return ''
+}
+
+/**
+ * 农历月日换算成对应公历日期再入库：后端按入库日期的农历月日滚动，
+ * 这样卡片文案与录入时看到的「农历X月X日」保持一致。换年只为避开无三十的月份。
+ */
+function toSolarDate(dateStr: string): string {
+  const [year = 0, month = 0, day = 0] = dateStr.split('-').map(Number)
+  for (let offset = 0; offset < 5; offset += 1) {
+    try {
+      const solar = Lunar.fromYmd(year + offset, month, day).getSolar()
+      return `${solar.getYear()}-${pad2(solar.getMonth())}-${pad2(solar.getDay())}`
+    } catch {
+      // 该农历年份此月没有这一天，继续尝试下一年
+    }
+  }
+  return dateStr
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, '0')
+}
+
+const lunarHint = computed(() => {
+  if (mode.value !== 'anniversary' || !form.lunar) {
+    return ''
+  }
+  const label = lunarLabel(form.date)
+  return label ? `每年按 ${label} 重复` : ''
+})
+
+/** 卡片里已用「农历」标签兜底，正文去掉重复前缀 */
+function lunarShortText(text: string): string {
+  return text.startsWith('农历') ? text.slice(2) : text
+}
+
+/** 农历纪念日会同时展示农历与公历，公历前缀避免与农历混淆 */
+function solarText(lunarText: string | null, nextDate: string): string {
+  return lunarText ? `公历 ${nextDate}` : nextDate
+}
+
+/** 已过的纪念日不显示负号，用「天前」表示 */
+function daysValue(days: number): number {
+  return Math.abs(days)
+}
+
+function daysUnit(days: number): string {
+  if (days === 0) {
+    return '今天'
+  }
+  return days > 0 ? '天后' : '天前'
+}
 </script>
 
 <template>
@@ -157,14 +233,18 @@ function typeLabel(type: string): string {
       <div v-else-if="anniversaries.length" class="anniv-grid">
         <article v-for="item in anniversaries" :key="item.id" class="anniv-card">
           <div class="anniv-card__days">
-            <strong class="tabular">{{ item.daysLeft }}</strong>
-            <span>{{ item.daysLeft === 0 ? '今天' : '天后' }}</span>
+            <strong class="tabular">{{ daysValue(item.daysLeft) }}</strong>
+            <span>{{ daysUnit(item.daysLeft) }}</span>
           </div>
           <div class="anniv-card__body">
             <div class="anniv-card__title">{{ item.title }}</div>
             <div class="anniv-card__meta">
               <span class="tag">{{ typeLabel(item.type) }}</span>
-              <span>{{ item.nextDate }}</span>
+              <template v-if="item.lunarText">
+                <span class="tag">农历</span>
+                <span class="anniv-card__lunar">{{ lunarShortText(item.lunarText) }}</span>
+              </template>
+              <span>{{ solarText(item.lunarText, item.nextDate) }}</span>
               <span v-if="item.person">{{ item.person }}</span>
             </div>
           </div>
@@ -217,8 +297,16 @@ function typeLabel(type: string): string {
           </el-radio-group>
         </el-form-item>
 
+        <el-form-item v-if="mode === 'anniversary'" label="历法">
+          <el-radio-group v-model="form.lunar">
+            <el-radio-button :value="false">公历</el-radio-button>
+            <el-radio-button :value="true">农历</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
         <el-form-item :label="mode === 'countdown' ? '目标日期' : '日期'" prop="date">
           <el-date-picker v-model="form.date" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          <p v-if="lunarHint" class="lunar-hint">{{ lunarHint }}</p>
         </el-form-item>
 
         <el-form-item v-if="mode === 'anniversary'" label="相关的人">
@@ -342,10 +430,23 @@ function typeLabel(type: string): string {
 
 .anniv-card__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 4px 8px;
   margin-top: 5px;
   font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
+.anniv-card__lunar {
+  color: var(--text-secondary);
+}
+
+.lunar-hint {
+  width: 100%;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
   color: var(--text-tertiary);
 }
 

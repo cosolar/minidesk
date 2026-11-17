@@ -10,6 +10,8 @@ export interface AnniversaryVO {
   advanceDays: number
   nextDate: string
   daysLeft: number
+  lunar: boolean
+  lunarText: string | null
 }
 
 export interface CountdownVO {
@@ -32,6 +34,7 @@ export const anniversaryApi = {
     date: string
     advanceDays?: number
     repeatYearly?: boolean
+    lunar?: boolean
   }) {
     return http.post<AnniversaryVO>('/anniversaries', payload)
   },

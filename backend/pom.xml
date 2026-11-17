@@ -117,6 +117,12 @@
       <artifactId>hutool-all</artifactId>
       <version>${hutool.version}</version>
     </dependency>
+    <!-- 农历换算：纪念日按农历月日每年滚动，并生成「农历冬月初五」文案 -->
+    <dependency>
+      <groupId>cn.6tail</groupId>
+      <artifactId>lunar</artifactId>
+      <version>1.7.8</version>
+    </dependency>
 
     <dependency>
       <groupId>org.projectlombok</groupId>

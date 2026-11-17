@@ -10,6 +10,7 @@ import cn.minims.desk.modules.common.calendar.entity.CountdownDO;
 import cn.minims.desk.modules.common.calendar.mapper.AnniversaryMapper;
 import cn.minims.desk.modules.common.calendar.mapper.CalendarEventMapper;
 import cn.minims.desk.modules.common.calendar.mapper.CountdownMapper;
+import cn.minims.desk.modules.common.calendar.support.LunarSupport;
 import cn.minims.desk.modules.common.calendar.vo.CalendarItemVO;
 import cn.minims.desk.modules.work.task.entity.TaskDO;
 import cn.minims.desk.modules.work.task.mapper.TaskMapper;
@@ -133,7 +134,7 @@ public class CalendarService {
         return value == null || value.isBlank();
     }
 
-    /** 纪念日按年重复时，只比对月日 */
+    /** 纪念日按年重复时，只比对月日；农历纪念日按农历月日换算发生日 */
     private void collectAnniversaries(LocalDate from, LocalDate to, List<CalendarItemVO> items) {
         try {
             for (AnniversaryDO item : anniversaryMapper.selectList(null)) {
@@ -142,7 +143,10 @@ public class CalendarService {
                 }
                 boolean yearly = item.getRepeatYearly() == null || item.getRepeatYearly() == 1;
                 LocalDate occur = item.getDate();
-                if (yearly) {
+                if (yearly && LunarSupport.isLunar(item.getLunar())) {
+                    // 返回不早于 from 的最近一次，跨年时天然落到下一年
+                    occur = LunarSupport.nextLunarOccurrence(item.getDate(), from);
+                } else if (yearly) {
                     occur = item.getDate().withYear(from.getYear());
                     if (occur.isBefore(from) && from.getYear() == to.getYear()) {
                         occur = occur.plusYears(1);
