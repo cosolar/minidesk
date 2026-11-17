@@ -4,6 +4,9 @@ import { useRoute } from 'vue-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
   Briefcase,
   Clock,
   Coffee,
@@ -13,14 +16,18 @@ import {
   EditPen,
   Folder,
   FolderAdd,
+  FolderOpened,
+  MoreFilled,
   Notebook,
   Plus,
   Reading,
   RefreshLeft,
+  RefreshRight,
   Search,
   Share,
   Star,
   StarFilled,
+  Tickets,
   View,
 } from '@element-plus/icons-vue'
 import { useDebounceFn, useWindowSize } from '@vueuse/core'
@@ -54,9 +61,10 @@ const saveState = ref<'saved' | 'saving' | 'dirty'>('saved')
 /** 默认只读预览，点「编辑」才进编辑器 */
 const mode = ref<ViewMode>('preview')
 const outline = ref<MarkdownHeading[]>([])
+const outlineCollapsed = ref(false)
 const activeHeading = ref('')
 const previewRef = ref<{ scrollTo: (id: string) => void } | null>(null)
-const editorRef = ref<{ focus: () => void } | null>(null)
+const editorRef = ref<{ focus: () => void; undo: () => void; redo: () => void } | null>(null)
 
 /**
  * 桌面宽度走左右分屏（源码 + 实时预览）。
@@ -444,6 +452,75 @@ function confirmMove(): void {
 
 function switchMode(next: ViewMode): void {
   mode.value = next
+}
+
+/** 返回目录：先把未落库的改动冲一次，再回到当前所属目录 */
+function closeNote(): void {
+  if (!selectedId.value) {
+    return
+  }
+  if (saveState.value === 'dirty') {
+    persist()
+  }
+  selectedId.value = null
+  mode.value = 'preview'
+}
+
+/** 笔记在树里的位置：板块 → 各级目录，供顶栏面包屑使用 */
+const noteFolderPath = computed<NoteFolder[]>(() => {
+  const folderId = detailQuery.data.value?.folderId ?? null
+  if (!folderId) {
+    return []
+  }
+  const index = new Map(folders.value.map((folder) => [folder.id, folder]))
+  const path: NoteFolder[] = []
+  let cursor = index.get(folderId)
+  while (cursor && path.length < 12) {
+    path.unshift(cursor)
+    cursor = cursor.parentId ? index.get(cursor.parentId) : undefined
+  }
+  return path
+})
+
+/** 目录条目按层级缩进：标题越深字越浅 */
+function headingTone(item: MarkdownHeading): string {
+  return `is-level-${Math.min(item.level, 3)}`
+}
+
+function gotoModuleRoot(): void {
+  closeNote()
+  selectedFolder.value = { module: activeModule.value, folderId: null }
+}
+
+function gotoFolder(folder: NoteFolder): void {
+  closeNote()
+  selectedFolder.value = { module: folder.module, folderId: folder.id }
+}
+
+function moveCurrentNote(): void {
+  if (!selectedId.value) {
+    return
+  }
+  openMoveDialog({
+    id: selectedId.value,
+    title: draft.title,
+    module: activeModule.value,
+    folderId: detailQuery.data.value?.folderId ?? null,
+    wordCount: 0,
+    pinned: draft.pinned,
+    updatedAt: updatedAtText.value,
+  })
+}
+
+/** 「更多」菜单统一出口，避免把三个动作散在模板里 */
+function onNoteCommand(command: string | number | object): void {
+  if (command === 'pin') {
+    void togglePin()
+  } else if (command === 'move') {
+    moveCurrentNote()
+  } else if (command === 'remove') {
+    removeCurrent()
+  }
 }
 
 function onEditorReady(): void {
@@ -866,18 +943,49 @@ async function clearRecycled(): Promise<void> {
     <section class="note-main">
       <template v-if="selectedId">
         <header class="note-bar">
-          <div class="note-bar__left">
-            <div class="mode-switch" role="tablist" aria-label="视图模式">
-              <button
-                type="button"
-                class="mode-switch__item"
-                :class="{ 'is-active': mode === 'preview' }"
-                role="tab"
-                @click="switchMode('preview')"
-              >
-                <el-icon><View /></el-icon>
-                预览
+          <button type="button" class="note-bar__back" aria-label="返回目录" @click="closeNote">
+            <el-icon><ArrowLeft /></el-icon>
+          </button>
+
+          <nav class="note-crumb" aria-label="当前位置">
+            <button type="button" class="note-crumb__link" @click="closeNote">
+              <el-icon><Notebook /></el-icon>
+              笔记
+            </button>
+            <span class="note-crumb__sep">/</span>
+            <button type="button" class="note-crumb__link" @click="gotoModuleRoot">
+              {{ moduleLabel(activeModule) }}
+            </button>
+            <template v-for="node in noteFolderPath" :key="node.id">
+              <span class="note-crumb__sep">/</span>
+              <button type="button" class="note-crumb__link" @click="gotoFolder(node)">
+                {{ node.name }}
               </button>
+            </template>
+            <span class="note-crumb__sep">/</span>
+            <span class="note-crumb__current">{{ draft.title || '无标题' }}</span>
+          </nav>
+
+          <div class="note-bar__tools">
+            <template v-if="mode === 'edit'">
+              <el-tooltip content="撤销（Ctrl/⌘ + Z）" placement="bottom">
+                <button type="button" class="icon-btn" aria-label="撤销" @click="editorRef?.undo()">
+                  <el-icon><RefreshLeft /></el-icon>
+                </button>
+              </el-tooltip>
+              <el-tooltip content="重做（Ctrl/⌘ + Shift + Z）" placement="bottom">
+                <button type="button" class="icon-btn" aria-label="重做" @click="editorRef?.redo()">
+                  <el-icon><RefreshRight /></el-icon>
+                </button>
+              </el-tooltip>
+            </template>
+
+            <span class="save-chip" :class="`is-${saveState}`">
+              <i class="save-chip__dot" />
+              {{ saveLabel }}
+            </span>
+
+            <div class="mode-switch" role="tablist" aria-label="视图模式">
               <button
                 type="button"
                 class="mode-switch__item"
@@ -888,52 +996,48 @@ async function clearRecycled(): Promise<void> {
                 <el-icon><EditPen /></el-icon>
                 编辑
               </button>
+              <button
+                type="button"
+                class="mode-switch__item"
+                :class="{ 'is-active': mode === 'preview' }"
+                role="tab"
+                @click="switchMode('preview')"
+              >
+                <el-icon><View /></el-icon>
+                预览
+              </button>
             </div>
-            <div class="note-bar__crumb">
-              <span class="note-bar__module">{{ moduleLabel(activeModule) }}</span>
-              <span class="note-bar__sep">/</span>
-              <span class="note-bar__name">{{ draft.title || '无标题' }}</span>
-            </div>
-          </div>
 
-          <div class="note-bar__right">
-            <span class="save-chip" :class="`is-${saveState}`">
-              <i class="save-chip__dot" />
-              {{ saveLabel }}
-            </span>
-            <el-tooltip :content="draft.pinned ? '取消置顶' : '置顶'" placement="top">
-              <button
-                type="button"
-                class="icon-btn"
-                :class="{ 'is-on': draft.pinned }"
-                aria-label="置顶"
-                @click="togglePin"
-              >
-                <el-icon>
-                  <component :is="draft.pinned ? StarFilled : Star" />
-                </el-icon>
+            <span class="note-bar__divider" />
+
+            <button type="button" class="bar-btn" aria-label="分享这篇笔记" @click="openShare">
+              <el-icon><Share /></el-icon>
+              <span class="bar-btn__text">分享</span>
+            </button>
+
+            <el-dropdown trigger="click" placement="bottom-end" @command="onNoteCommand">
+              <button type="button" class="bar-btn" aria-label="更多操作">
+                <el-icon><MoreFilled /></el-icon>
               </button>
-            </el-tooltip>
-            <el-tooltip content="分享这篇笔记" placement="top">
-              <button
-                type="button"
-                class="icon-btn"
-                aria-label="分享这篇笔记"
-                @click="openShare"
-              >
-                <el-icon><Share /></el-icon>
-              </button>
-            </el-tooltip>
-            <el-tooltip content="删除笔记" placement="top">
-              <button
-                type="button"
-                class="icon-btn icon-btn--danger"
-                aria-label="删除笔记"
-                @click="removeCurrent"
-              >
-                <el-icon><Delete /></el-icon>
-              </button>
-            </el-tooltip>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="pin">
+                    <el-icon>
+                      <component :is="draft.pinned ? StarFilled : Star" />
+                    </el-icon>
+                    {{ draft.pinned ? '取消置顶' : '置顶笔记' }}
+                  </el-dropdown-item>
+                  <el-dropdown-item command="move">
+                    <el-icon><FolderOpened /></el-icon>
+                    移动到目录
+                  </el-dropdown-item>
+                  <el-dropdown-item command="remove" divided>
+                    <el-icon><Delete /></el-icon>
+                    <span class="bar-menu__danger">移入回收站</span>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </header>
 
@@ -941,7 +1045,11 @@ async function clearRecycled(): Promise<void> {
           <el-skeleton :rows="8" animated />
         </div>
 
-        <div v-else-if="mode === 'preview'" class="doc-body" :class="{ 'has-outline': outline.length }">
+        <div
+          v-else-if="mode === 'preview'"
+          class="doc-body"
+          :class="{ 'has-outline': outline.length, 'is-outline-collapsed': outlineCollapsed }"
+        >
           <div class="doc-scroll">
             <article class="doc-article">
               <h1 class="doc-article__title">{{ draft.title || '无标题' }}</h1>
@@ -969,24 +1077,70 @@ async function clearRecycled(): Promise<void> {
             </article>
           </div>
 
-          <aside v-if="outline.length" class="doc-outline">
+          <aside
+            v-if="outline.length"
+            class="doc-outline"
+            :class="{ 'is-collapsed': outlineCollapsed }"
+          >
             <div class="doc-outline__head">
-              目录
-              <span>{{ outline.length }}</span>
+              <span class="doc-outline__title">
+                <el-icon><Tickets /></el-icon>
+                <span class="doc-outline__label">文章目录</span>
+              </span>
+              <button
+                type="button"
+                class="doc-outline__toggle"
+                :aria-label="outlineCollapsed ? '展开目录' : '收起目录'"
+                @click="outlineCollapsed = !outlineCollapsed"
+              >
+                <el-icon>
+                  <component :is="outlineCollapsed ? ArrowDown : ArrowUp" />
+                </el-icon>
+              </button>
             </div>
-            <ul class="doc-outline__list">
-              <li v-for="item in outline" :key="item.id">
-                <button
-                  type="button"
-                  class="doc-outline__item"
-                  :class="{ 'is-active': activeHeading === item.id }"
-                  :style="{ paddingLeft: `${10 + (item.level - 1) * 12}px` }"
-                  @click="goHeading(item.id)"
-                >
-                  {{ item.text }}
-                </button>
-              </li>
-            </ul>
+
+            <div v-show="!outlineCollapsed" class="doc-outline__scroll">
+              <ul class="doc-outline__list">
+                <li v-for="item in outline" :key="item.id">
+                  <button
+                    type="button"
+                    class="doc-outline__item"
+                    :class="[headingTone(item), { 'is-active': activeHeading === item.id }]"
+                    @click="goHeading(item.id)"
+                  >
+                    <i class="doc-outline__marker" />
+                    <span class="doc-outline__text">{{ item.text }}</span>
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <div v-show="!outlineCollapsed" class="doc-outline__art" aria-hidden="true">
+              <svg viewBox="0 0 160 84" fill="none">
+                <defs>
+                  <radialGradient id="outlineGlow" cx="50%" cy="45%" r="55%">
+                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.28" />
+                    <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
+                  </radialGradient>
+                </defs>
+                <ellipse cx="80" cy="44" rx="58" ry="32" fill="url(#outlineGlow)" />
+                <path
+                  d="M56 62c-13-5-18-17-12-28 11 4 18 15 12 28Z"
+                  fill="currentColor"
+                  opacity="0.32"
+                />
+                <path
+                  d="M103 58c13-6 18-16 12-26-11 5-17 14-12 26Z"
+                  fill="currentColor"
+                  opacity="0.24"
+                />
+                <path
+                  d="M79 68c-2-14 5-23 16-25-1 12-7 22-16 25Z"
+                  fill="currentColor"
+                  opacity="0.18"
+                />
+              </svg>
+            </div>
           </aside>
         </div>
 
@@ -1976,37 +2130,136 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 .note-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex: 0 0 auto;
-  padding: 10px $doc-gutter;
+  padding: 9px $doc-gutter;
   border-bottom: 1px solid var(--border-color);
-  background: linear-gradient(
-    180deg,
-    var(--bg-card) 0%,
-    color-mix(in srgb, var(--bg-card) 88%, var(--bg-subtle)) 100%
-  );
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--bg-subtle));
 }
 
-.note-bar__left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
+.note-bar__back {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 9px;
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background $duration-fast $ease-out,
+    color $duration-fast $ease-out;
+
+  &:hover {
+    background: var(--brand-50);
+    color: var(--brand-600);
+  }
 }
 
-.note-bar__right {
+.note-crumb {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.note-crumb__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: 0 0 auto;
+  max-width: 140px;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  @include ellipsis(1);
+  transition:
+    background $duration-fast $ease-out,
+    color $duration-fast $ease-out;
+
+  .el-icon {
+    font-size: 13px;
+    color: var(--brand-500);
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--brand-600);
+  }
+}
+
+.note-crumb__sep {
+  flex: 0 0 auto;
+  color: var(--border-strong);
+  font-size: 11px;
+}
+
+.note-crumb__current {
+  min-width: 0;
+  padding-left: 2px;
+  color: var(--text-primary);
+  font-weight: 600;
+  @include ellipsis(1);
+}
+
+.note-bar__tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.note-bar__divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border-color);
+}
+
+.bar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color $duration-fast $ease-out,
+    background $duration-fast $ease-out,
+    color $duration-fast $ease-out;
+
+  .el-icon {
+    font-size: 14px;
+  }
+
+  &:hover {
+    border-color: var(--brand-200);
+    background: var(--brand-50);
+    color: var(--brand-600);
+  }
+}
+
+.bar-menu__danger {
+  color: $c-alert;
 }
 
 .mode-switch {
   display: inline-flex;
   gap: 2px;
   flex: 0 0 auto;
-  padding: 2px;
+  padding: 3px;
   border-radius: 10px;
   background: var(--bg-subtle);
 }
@@ -2035,42 +2288,11 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   }
 
   &.is-active {
-    background: var(--bg-card);
-    color: var(--brand-700);
+    background: var(--brand-500);
+    color: var(--text-inverse);
     font-weight: 600;
-    box-shadow: var(--shadow-card);
+    box-shadow: 0 4px 10px color-mix(in srgb, var(--brand-500) 28%, transparent);
   }
-}
-
-.note-bar__crumb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-
-  @include respond-below(lg) {
-    display: none;
-  }
-}
-
-.note-bar__module {
-  flex: 0 0 auto;
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--bg-subtle);
-  color: var(--text-secondary);
-  font-size: 11px;
-}
-
-.note-bar__sep {
-  color: var(--border-strong);
-}
-
-.note-bar__name {
-  @include ellipsis(1);
-  color: var(--text-secondary);
 }
 
 .save-chip {
@@ -2173,11 +2395,16 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   grid-template-rows: minmax(0, 1fr);
 
   &.has-outline {
-    grid-template-columns: minmax(0, 1fr) 196px;
+    grid-template-columns: minmax(0, 1fr) 236px;
+  }
+
+  &.has-outline.is-outline-collapsed {
+    grid-template-columns: minmax(0, 1fr) 54px;
   }
 
   @include respond-below(lg) {
-    &.has-outline {
+    &.has-outline,
+    &.has-outline.is-outline-collapsed {
       grid-template-columns: minmax(0, 1fr);
     }
   }
@@ -2241,10 +2468,27 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 }
 
 .doc-outline {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
-  padding: 26px 12px 26px 16px;
-  border-left: 1px solid var(--border-color);
+  margin: 14px 12px 14px 0;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-subtle) 60%, var(--bg-card));
+  overflow: hidden;
+
+  &.is-collapsed {
+    .doc-outline__head {
+      flex-direction: column;
+      gap: 8px;
+      padding: 11px 0;
+      border-bottom: none;
+    }
+
+    .doc-outline__title .el-icon {
+      font-size: 15px;
+    }
+  }
 
   @include respond-below(lg) {
     display: none;
@@ -2255,40 +2499,97 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
-  padding-left: 10px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 11px 10px 9px 12px;
+  border-bottom: 1px dashed var(--border-color);
+}
 
-  span {
-    color: var(--text-tertiary);
-    font-weight: 500;
+.doc-outline__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+  @include ellipsis(1);
+
+  .el-icon {
+    flex: 0 0 auto;
+    font-size: 14px;
+    color: var(--brand-500);
   }
+}
+
+.doc-outline__toggle {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition:
+    background $duration-fast $ease-out,
+    color $duration-fast $ease-out;
+
+  .el-icon {
+    font-size: 12px;
+  }
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+}
+
+.doc-outline__scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 8px 0;
+  @include scrollbar(3px);
 }
 
 .doc-outline__list {
   display: flex;
   flex-direction: column;
   gap: 1px;
+  padding-bottom: 8px;
 }
 
 .doc-outline__item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   width: 100%;
-  padding: 5px 10px;
+  padding: 6px 8px;
   border: none;
-  border-left: 2px solid transparent;
-  border-radius: 0 8px 8px 0;
+  border-radius: 8px;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--text-secondary);
   font-size: 12px;
+  line-height: 1.45;
   text-align: left;
   cursor: pointer;
-  @include ellipsis(1);
   transition:
     background $duration-fast $ease-out,
     color $duration-fast $ease-out;
+
+  &.is-level-2 {
+    padding-left: 20px;
+    font-size: 11.5px;
+  }
+
+  &.is-level-3 {
+    padding-left: 32px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+  }
 
   &:hover {
     background: var(--bg-hover);
@@ -2296,10 +2597,40 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   }
 
   &.is-active {
-    border-left-color: var(--brand-500);
     background: var(--brand-50);
     color: var(--brand-700);
     font-weight: 600;
+
+    .doc-outline__marker {
+      background: var(--brand-500);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 16%, transparent);
+    }
+  }
+}
+
+.doc-outline__marker {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transition: background $duration-fast $ease-out;
+}
+
+.doc-outline__text {
+  min-width: 0;
+  @include ellipsis(1);
+}
+
+.doc-outline__art {
+  flex: 0 0 auto;
+  padding: 0 10px 6px;
+  color: var(--brand-500);
+
+  svg {
+    display: block;
+    width: 100%;
+    height: auto;
   }
 }
 
@@ -2626,5 +2957,40 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   background: var(--bg-subtle);
   color: var(--text-secondary);
   font-size: 12px;
+}
+
+// ---------- 窄屏适配（必须写在基础规则之后） ----------
+@include respond-below(md) {
+  .note-bar {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+
+  // 面包屑中间层级太多，窄屏只留当前标题，避免把工具区挤到换行
+  .note-crumb__link,
+  .note-crumb__sep {
+    display: none;
+  }
+
+  .note-crumb__current {
+    font-size: 13px;
+  }
+
+  .note-bar__divider,
+  .save-chip {
+    display: none;
+  }
+
+  .bar-btn {
+    padding: 0 8px;
+  }
+
+  .bar-btn__text {
+    display: none;
+  }
+
+  .mode-switch__item {
+    padding: 4px 8px;
+  }
 }
 </style>

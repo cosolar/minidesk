@@ -45,6 +45,27 @@ function focus(): void {
   host.value?.querySelector<HTMLTextAreaElement>('.CodeMirror textarea')?.focus()
 }
 
+interface CodeMirrorLike {
+  undo: () => void
+  redo: () => void
+}
+
+/** CodeMirror 5 把实例挂在包裹节点上，撤销/重做走它自己的历史栈 */
+function codeMirror(): CodeMirrorLike | null {
+  const wrapper = host.value?.querySelector('.CodeMirror') as
+    | (HTMLElement & { CodeMirror?: CodeMirrorLike })
+    | null
+  return wrapper?.CodeMirror ?? null
+}
+
+function undo(): void {
+  codeMirror()?.undo()
+}
+
+function redo(): void {
+  codeMirror()?.redo()
+}
+
 onMounted(() => {
   void nextTick(() => emit('ready'))
 })
@@ -52,6 +73,8 @@ onMounted(() => {
 defineExpose({
   focus,
   getValue: () => props.modelValue,
+  undo,
+  redo,
 })
 </script>
 
