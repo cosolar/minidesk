@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-11-18
+
+### Added
+
+- Anniversary page rebuilt as a management center: a hero showing only the next
+  upcoming date with an oversized day counter and year progress, a four-metric
+  overview (all / birthdays / special days / upcoming), and a filterable card
+  list with cover, type, note, date and countdown. Countdowns moved into their
+  own compact section.
+- Countdown section redesigned: the calendar illustration sits in a side panel,
+  and every countdown renders as a mini calendar page beside its title and a
+  large remaining-day figure. Two cards per row, with an odd last item spanning
+  the full row.
+- Two illustrations cropped from the supplied banners: the heart jar decorates
+  the hero, the desk calendar anchors the countdown section. Both are dimmed in
+  the night theme so they do not glare against dark panels.
+- Anniversaries accept a cover image, a note (≤ 200 chars) and an "important"
+  flag, editable in place through the new `PUT /api/anniversaries/{id}`.
+
+### Changed
+
+- The anniversary hero uses the lake illustration with theme-driven filters, so
+  all five themes keep their own tint, haze and darkness.
+- Todo page rebuilt around a planning flow: a greeting hero with a tear-off
+  date card, four clickable overview metrics (all / today / due soon / done),
+  quick filters with counts, automatic groups (overdue / today / due soon /
+  later), grouped or flat views with three sort orders, inline priority and
+  due-time affordances, and a quick-action rail. One lake illustration backs
+  the page and fades into soft glass panels.
+- Note workspace refined: the reading header now carries a module pill, folder
+  path, a larger title, meta chips and a brand rule; tables render as rounded
+  cards with a tinted header; the outline became a slim side rail with an
+  active section, a count and a back-to-top action; folder views list child
+  folders with subtree counts. The editor toolbar is now a rounded format bar
+  with brand-coloured hover states and pill tabs in single-column mode, and the
+  note top bar hugs the card edges while collapsing the breadcrumb on narrower
+  screens. Document counts were removed from the folder tree.
+
 ## [0.4.2] - 2026-11-17
 
 ### Added
