@@ -46,6 +46,9 @@ public class SchemaUpgrade implements ApplicationRunner {
         ensureColumn("job_exec_log", "message", "VARCHAR(500)");
         ensureColumn("note", "deleted_at", "DATETIME");
         ensureColumn("note", "folder_id", "BIGINT");
+        // 纪念日新增封面与「重要」标记，老库靠这里补齐
+        ensureColumn("anniversary", "cover", "VARCHAR(500)");
+        ensureColumn("anniversary", "important", "TINYINT DEFAULT 0");
         ensureIndex("note", "idx_note_recycle", "deleted, deleted_at");
         ensureIndex("note", "idx_note_folder", "folder_id");
         // 本次改动之前软删除的笔记没有时间戳，用最后修改时间兜底，否则永远不会被清理

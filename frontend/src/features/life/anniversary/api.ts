@@ -1,5 +1,18 @@
 import { http } from '@/core/http/client'
 
+export type AnniversaryPayload = {
+  title: string
+  type?: string
+  person?: string | null
+  date: string
+  advanceDays?: number
+  repeatYearly?: boolean
+  lunar?: boolean
+  note?: string | null
+  cover?: string | null
+  important?: boolean
+}
+
 export interface AnniversaryVO {
   id: string
   title: string
@@ -12,6 +25,9 @@ export interface AnniversaryVO {
   daysLeft: number
   lunar: boolean
   lunarText: string | null
+  note: string | null
+  cover: string | null
+  important: boolean
 }
 
 export interface CountdownVO {
@@ -27,16 +43,11 @@ export const anniversaryApi = {
   list() {
     return http.get<AnniversaryVO[]>('/anniversaries')
   },
-  create(payload: {
-    title: string
-    type?: string
-    person?: string | null
-    date: string
-    advanceDays?: number
-    repeatYearly?: boolean
-    lunar?: boolean
-  }) {
+  create(payload: AnniversaryPayload) {
     return http.post<AnniversaryVO>('/anniversaries', payload)
+  },
+  update(id: string, payload: AnniversaryPayload) {
+    return http.put<AnniversaryVO>(`/anniversaries/${id}`, payload)
   },
   remove(id: string) {
     return http.delete<void>(`/anniversaries/${id}`)

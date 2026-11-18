@@ -55,7 +55,10 @@ public class AnniversaryService {
                             next.toString(),
                             ChronoUnit.DAYS.between(today, next),
                             lunar,
-                            lunar ? LunarSupport.lunarText(item.getDate()) : null);
+                            lunar ? LunarSupport.lunarText(item.getDate()) : null,
+                            item.getNote(),
+                            item.getCover(),
+                            item.getImportant() != null && item.getImportant() == 1);
                 })
                 .sorted(Comparator.comparingLong(AnniversaryVO::daysLeft))
                 .toList();
@@ -79,11 +82,34 @@ public class AnniversaryService {
     @Transactional(rollbackFor = Exception.class)
     public AnniversaryVO createAnniversary(String title, String type, String person,
                                           LocalDate date, Integer advanceDays, Boolean repeatYearly,
-                                          Boolean lunar) {
+                                          Boolean lunar, String note, String cover, Boolean important) {
+        AnniversaryDO item = new AnniversaryDO();
+        applyFields(item, title, type, person, date, advanceDays, repeatYearly, lunar, note, cover, important);
+        item.setCreatedAt(LocalDateTime.now());
+        anniversaryMapper.insert(item);
+        return findVO(item.getId());
+    }
+
+    @Transactional(rollbackFor = Exception.class)
+    public AnniversaryVO updateAnniversary(Long id, String title, String type, String person,
+                                          LocalDate date, Integer advanceDays, Boolean repeatYearly,
+                                          Boolean lunar, String note, String cover, Boolean important) {
+        AnniversaryDO item = anniversaryMapper.selectById(id);
+        if (item == null) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+        applyFields(item, title, type, person, date, advanceDays, repeatYearly, lunar, note, cover, important);
+        anniversaryMapper.updateById(item);
+        return findVO(id);
+    }
+
+    /** 新建与编辑共用同一套字段映射，避免两条路径校验口径不一致 */
+    private void applyFields(AnniversaryDO item, String title, String type, String person,
+                             LocalDate date, Integer advanceDays, Boolean repeatYearly, Boolean lunar,
+                             String note, String cover, Boolean important) {
         if (!StringUtils.hasText(title) || date == null) {
             throw new BizException(ErrorCode.PARAM_ERROR, "请填写名称与日期");
         }
-        AnniversaryDO item = new AnniversaryDO();
         item.setTitle(title.trim());
         item.setType(StringUtils.hasText(type) ? type : "birthday");
         item.setPerson(person);
@@ -91,10 +117,14 @@ public class AnniversaryService {
         item.setLunar(Boolean.TRUE.equals(lunar) ? 1 : 0);
         item.setRepeatYearly(Boolean.FALSE.equals(repeatYearly) ? 0 : 1);
         item.setAdvanceDays(advanceDays == null ? 3 : Math.max(advanceDays, 0));
-        item.setCreatedAt(LocalDateTime.now());
-        anniversaryMapper.insert(item);
+        item.setNote(StringUtils.hasText(note) ? note.trim() : null);
+        item.setCover(StringUtils.hasText(cover) ? cover.trim() : null);
+        item.setImportant(Boolean.TRUE.equals(important) ? 1 : 0);
+    }
+
+    private AnniversaryVO findVO(Long id) {
         return listAnniversaries().stream()
-                .filter(vo -> vo.id().equals(String.valueOf(item.getId())))
+                .filter(vo -> vo.id().equals(String.valueOf(id)))
                 .findFirst()
                 .orElseThrow();
     }

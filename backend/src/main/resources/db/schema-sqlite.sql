@@ -640,6 +640,8 @@ CREATE TABLE IF NOT EXISTS anniversary (
   advance_days  INTEGER      NOT NULL DEFAULT 3,
   contact_id    BIGINT,
   note          VARCHAR(200),
+  cover         VARCHAR(500),
+  important     TINYINT      NOT NULL DEFAULT 0,
   created_at    DATETIME     NOT NULL
 );
 

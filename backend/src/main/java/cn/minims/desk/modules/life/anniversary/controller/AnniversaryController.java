@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -47,8 +48,33 @@ public class AnniversaryController {
                 ? null : Boolean.valueOf(String.valueOf(body.get("repeatYearly")));
         Boolean lunar = body.get("lunar") == null
                 ? null : Boolean.valueOf(String.valueOf(body.get("lunar")));
+        String note = body.get("note") == null ? null : String.valueOf(body.get("note"));
+        String cover = body.get("cover") == null ? null : String.valueOf(body.get("cover"));
+        Boolean important = body.get("important") == null
+                ? null : Boolean.valueOf(String.valueOf(body.get("important")));
         return Result.ok(anniversaryService.createAnniversary(
-                title, type, person, date, advanceDays, repeat, lunar));
+                title, type, person, date, advanceDays, repeat, lunar, note, cover, important));
+    }
+
+    @PutMapping("/anniversaries/{id}")
+    @SaCheckPermission(PermissionCodes.ANNIVERSARY_MANAGE)
+    public Result<AnniversaryVO> updateAnniversary(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        String title = body.get("title") == null ? null : String.valueOf(body.get("title"));
+        String type = body.get("type") == null ? null : String.valueOf(body.get("type"));
+        String person = body.get("person") == null ? null : String.valueOf(body.get("person"));
+        LocalDate date = body.get("date") == null ? null : LocalDate.parse(String.valueOf(body.get("date")));
+        Integer advanceDays = body.get("advanceDays") == null
+                ? null : Integer.valueOf(String.valueOf(body.get("advanceDays")));
+        Boolean repeat = body.get("repeatYearly") == null
+                ? null : Boolean.valueOf(String.valueOf(body.get("repeatYearly")));
+        Boolean lunar = body.get("lunar") == null
+                ? null : Boolean.valueOf(String.valueOf(body.get("lunar")));
+        String note = body.get("note") == null ? null : String.valueOf(body.get("note"));
+        String cover = body.get("cover") == null ? null : String.valueOf(body.get("cover"));
+        Boolean important = body.get("important") == null
+                ? null : Boolean.valueOf(String.valueOf(body.get("important")));
+        return Result.ok(anniversaryService.updateAnniversary(
+                id, title, type, person, date, advanceDays, repeat, lunar, note, cover, important));
     }
 
     @DeleteMapping("/anniversaries/{id}")

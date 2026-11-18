@@ -35,5 +35,11 @@ public class AnniversaryDO {
 
     private String note;
 
+    /** 封面图地址：本地上传的 /api/files/{id}/raw 或外链 */
+    private String cover;
+
+    /** 1 = 重要，列表里打「重要」标签并参与排序 */
+    private Integer important;
+
     private LocalDateTime createdAt;
 }
