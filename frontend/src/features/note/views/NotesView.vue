@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   ArrowDown,
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   Briefcase,
   Clock,
@@ -65,6 +66,8 @@ const outlineCollapsed = ref(false)
 const activeHeading = ref('')
 const previewRef = ref<{ scrollTo: (id: string) => void } | null>(null)
 const editorRef = ref<{ focus: () => void; undo: () => void; redo: () => void } | null>(null)
+/** 预览正文的滚动容器，供目录「回到顶部」使用 */
+const docScrollRef = ref<HTMLElement | null>(null)
 
 /**
  * 桌面宽度走左右分屏（源码 + 实时预览）。
@@ -159,6 +162,30 @@ const folderNotes = computed(() => {
       : !note.folderId && note.module === current.module,
   )
 })
+
+/** 当前目录下的直接子目录；根节点展示该板块的一级目录 */
+const childFolders = computed(() => {
+  const current = selectedFolder.value
+  return folders.value.filter((folder) =>
+    current.folderId ? folder.parentId === current.folderId : !folder.parentId && folder.module === current.module,
+  )
+})
+
+/** 目录卡片上的文档数按整棵子树算，和左侧树的计数保持一致 */
+function descendantNotes(folderId: string): number {
+  const ids = new Set<string>([folderId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const folder of folders.value) {
+      if (folder.parentId && ids.has(folder.parentId) && !ids.has(folder.id)) {
+        ids.add(folder.id)
+        changed = true
+      }
+    }
+  }
+  return outlineNotes.value.filter((note) => note.folderId && ids.has(note.folderId)).length
+}
 
 function noteMeta(note: Pick<NoteSummary, 'module'>) {
   return MODULE_META[note.module] ?? DEFAULT_META
@@ -533,6 +560,10 @@ function onEditorReady(): void {
 function goHeading(id: string): void {
   activeHeading.value = id
   previewRef.value?.scrollTo(id)
+}
+
+function scrollDocTop(): void {
+  docScrollRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function confirmRemove(id: string, title: string): Promise<void> {
@@ -1050,16 +1081,38 @@ async function clearRecycled(): Promise<void> {
           class="doc-body"
           :class="{ 'has-outline': outline.length, 'is-outline-collapsed': outlineCollapsed }"
         >
-          <div class="doc-scroll">
+          <div ref="docScrollRef" class="doc-scroll">
             <article class="doc-article">
-              <h1 class="doc-article__title">{{ draft.title || '无标题' }}</h1>
-              <div class="doc-article__meta">
-                <span>{{ wordCount }} 字</span>
-                <i class="doc-article__dot" />
-                <span>更新于 {{ relative(updatedAtText) }}</span>
-                <i class="doc-article__dot" />
-                <span>{{ moduleLabel(activeModule) }}</span>
-              </div>
+              <header class="doc-article__head">
+                <div class="doc-article__kicker">
+                  <span class="doc-article__module" :class="`is-${activeModule}`">
+                    {{ moduleLabel(activeModule) }}
+                  </span>
+                  <template v-for="node in noteFolderPath" :key="node.id">
+                    <span class="doc-article__sep">/</span>
+                    <span class="doc-article__crumb">{{ node.name }}</span>
+                  </template>
+                </div>
+
+                <h1 class="doc-article__title">{{ draft.title || '无标题' }}</h1>
+
+                <div class="doc-article__meta">
+                  <span class="doc-meta">
+                    <el-icon><Clock /></el-icon>
+                    更新于 {{ relative(updatedAtText) }}
+                  </span>
+                  <span class="doc-meta">
+                    <el-icon><EditPen /></el-icon>
+                    {{ wordCount }} 字
+                  </span>
+                  <span v-if="draft.pinned" class="doc-meta is-pinned">
+                    <el-icon><StarFilled /></el-icon>
+                    置顶
+                  </span>
+                </div>
+
+                <span class="doc-article__rule" aria-hidden="true" />
+              </header>
 
               <MarkdownPreview
                 v-if="draft.content.trim()"
@@ -1085,18 +1138,21 @@ async function clearRecycled(): Promise<void> {
             <div class="doc-outline__head">
               <span class="doc-outline__title">
                 <el-icon><Tickets /></el-icon>
-                <span class="doc-outline__label">文章目录</span>
+                <span class="doc-outline__label">目录</span>
               </span>
-              <button
-                type="button"
-                class="doc-outline__toggle"
-                :aria-label="outlineCollapsed ? '展开目录' : '收起目录'"
-                @click="outlineCollapsed = !outlineCollapsed"
-              >
-                <el-icon>
-                  <component :is="outlineCollapsed ? ArrowDown : ArrowUp" />
-                </el-icon>
-              </button>
+              <div class="doc-outline__tools">
+                <span v-show="!outlineCollapsed" class="doc-outline__count">{{ outline.length }}</span>
+                <button
+                  type="button"
+                  class="doc-outline__toggle"
+                  :aria-label="outlineCollapsed ? '展开目录' : '收起目录'"
+                  @click="outlineCollapsed = !outlineCollapsed"
+                >
+                  <el-icon>
+                    <component :is="outlineCollapsed ? ArrowDown : ArrowUp" />
+                  </el-icon>
+                </button>
+              </div>
             </div>
 
             <div v-show="!outlineCollapsed" class="doc-outline__scroll">
@@ -1115,32 +1171,15 @@ async function clearRecycled(): Promise<void> {
               </ul>
             </div>
 
-            <div v-show="!outlineCollapsed" class="doc-outline__art" aria-hidden="true">
-              <svg viewBox="0 0 160 84" fill="none">
-                <defs>
-                  <radialGradient id="outlineGlow" cx="50%" cy="45%" r="55%">
-                    <stop offset="0%" stop-color="currentColor" stop-opacity="0.28" />
-                    <stop offset="100%" stop-color="currentColor" stop-opacity="0" />
-                  </radialGradient>
-                </defs>
-                <ellipse cx="80" cy="44" rx="58" ry="32" fill="url(#outlineGlow)" />
-                <path
-                  d="M56 62c-13-5-18-17-12-28 11 4 18 15 12 28Z"
-                  fill="currentColor"
-                  opacity="0.32"
-                />
-                <path
-                  d="M103 58c13-6 18-16 12-26-11 5-17 14-12 26Z"
-                  fill="currentColor"
-                  opacity="0.24"
-                />
-                <path
-                  d="M79 68c-2-14 5-23 16-25-1 12-7 22-16 25Z"
-                  fill="currentColor"
-                  opacity="0.18"
-                />
-              </svg>
-            </div>
+            <button
+              v-show="!outlineCollapsed"
+              type="button"
+              class="doc-outline__top"
+              @click="scrollDocTop"
+            >
+              <el-icon><ArrowUp /></el-icon>
+              <span>回到顶部</span>
+            </button>
           </aside>
         </div>
 
@@ -1164,7 +1203,10 @@ async function clearRecycled(): Promise<void> {
           <div class="folder-bar__title">
             <span class="folder-bar__icon"><el-icon><Folder /></el-icon></span>
             <strong>{{ selectedFolderName }}</strong>
-            <small>{{ folderNotes.length }} 篇文档</small>
+            <small>
+              <template v-if="childFolders.length">{{ childFolders.length }} 个目录 · </template>
+              {{ folderNotes.length }} 篇文档
+            </small>
           </div>
           <div class="folder-bar__actions">
             <el-button
@@ -1178,7 +1220,26 @@ async function clearRecycled(): Promise<void> {
           </div>
         </header>
 
-        <div v-if="folderNotes.length" class="folder-grid">
+        <div v-if="childFolders.length || folderNotes.length" class="folder-grid">
+          <article
+            v-for="folder in childFolders"
+            :key="`folder-${folder.id}`"
+            class="folder-card is-subfolder"
+            @click="selectFolder({ module: folder.module, folderId: folder.id })"
+          >
+            <div class="folder-card__head">
+              <span class="folder-card__icon is-folder"><el-icon><FolderOpened /></el-icon></span>
+              <strong>{{ folder.name }}</strong>
+            </div>
+            <div class="folder-card__meta">
+              <span>{{ descendantNotes(folder.id) }} 篇文档</span>
+              <span class="folder-card__enter">
+                进入
+                <el-icon><ArrowRight /></el-icon>
+              </span>
+            </div>
+          </article>
+
           <article
             v-for="note in folderNotes"
             :key="note.id"
@@ -1206,8 +1267,8 @@ async function clearRecycled(): Promise<void> {
 
         <div v-else class="note-main__empty">
           <span class="note-main__empty-icon"><el-icon><Document /></el-icon></span>
-          <h2>「{{ selectedFolderName }}」还没有文档</h2>
-          <p>在这里新建一篇 Markdown 文档，或把左侧的文档拖进来。</p>
+          <h2>「{{ selectedFolderName }}」还是空的</h2>
+          <p>新建一篇 Markdown 文档，或在这个目录下再建子目录。</p>
           <el-button type="primary" :icon="Plus" @click="onCreate">新建文档</el-button>
         </div>
       </template>
@@ -1399,23 +1460,44 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 .note-side__top {
   position: relative;
   flex: 0 0 auto;
-  padding: 15px 14px 13px;
-  border-bottom: 1px solid var(--border-color);
+  padding: 16px 15px 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
   background:
     radial-gradient(
-      112% 92% at 0% 0%,
-      color-mix(in srgb, var(--brand-400) 15%, transparent),
-      transparent 68%
+      120% 100% at 0% 0%,
+      color-mix(in srgb, var(--brand-400) 18%, transparent),
+      transparent 62%
+    ),
+    radial-gradient(
+      84% 120% at 100% 0%,
+      color-mix(in srgb, var(--brand-200) 26%, transparent),
+      transparent 58%
     ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--brand-50) 55%, var(--bg-card)),
+      color-mix(in srgb, var(--brand-50) 58%, var(--bg-card)),
       var(--bg-card)
     );
+  overflow: hidden;
+
+  // 右上角一圈极淡的品牌光环，避免头部成为一块死板色块
+  &::after {
+    position: absolute;
+    top: -48px;
+    right: -36px;
+    width: 132px;
+    height: 132px;
+    border: 1px solid color-mix(in srgb, var(--brand-400) 22%, transparent);
+    border-radius: 50%;
+    box-shadow: 0 0 0 18px color-mix(in srgb, var(--brand-400) 6%, transparent);
+    content: '';
+    pointer-events: none;
+  }
 }
 
 .note-side__head {
   position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1438,7 +1520,9 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   background: linear-gradient(145deg, var(--brand-400), var(--brand-600));
   color: var(--text-inverse);
   font-size: 18px;
-  box-shadow: 0 6px 14px color-mix(in srgb, var(--brand-500) 28%, transparent);
+  box-shadow:
+    0 7px 16px color-mix(in srgb, var(--brand-500) 30%, transparent),
+    inset 0 1px 0 rgb(255 255 255 / 32%);
 }
 
 .note-side__heading {
@@ -1449,8 +1533,9 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 
   strong {
     font-family: var(--font-display);
-    font-size: 15.5px;
+    font-size: 16px;
     font-weight: 700;
+    letter-spacing: -0.01em;
     line-height: 1.2;
     color: var(--text-primary);
   }
@@ -1458,6 +1543,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   small {
     font-size: 10.5px;
     color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 }
@@ -1688,6 +1774,8 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 
 // 搜索框
 .note-search {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1699,14 +1787,27 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   }
 
   :deep(.el-input__wrapper) {
-    border-radius: 10px;
-    background: var(--bg-card);
+    border-radius: 11px;
+    background: color-mix(in srgb, var(--bg-card) 78%, transparent);
     box-shadow: 0 0 0 1px var(--border-color) inset;
-    transition: box-shadow $duration-fast $ease-out;
+    transition:
+      box-shadow $duration-fast $ease-out,
+      background-color $duration-fast $ease-out;
+
+    &:hover {
+      box-shadow: 0 0 0 1px var(--border-strong) inset;
+    }
 
     &.is-focus {
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-400) 60%, var(--border-color)) inset;
+      background: var(--bg-card);
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--brand-400) 62%, var(--border-color)) inset,
+        0 4px 12px color-mix(in srgb, var(--brand-500) 10%, transparent);
     }
+  }
+
+  :deep(.el-input__prefix) {
+    color: var(--text-tertiary);
   }
 
   &__result {
@@ -1721,7 +1822,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 12px 14px;
+  padding: 10px 10px 12px;
   @include scrollbar(6px);
 }
 
@@ -2020,9 +2121,13 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   align-items: center;
   gap: 9px;
   flex: 0 0 auto;
-  padding: 10px 13px;
-  border-top: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--bg-subtle) 65%, var(--bg-card));
+  margin: 8px 10px 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--brand-400) 16%, var(--border-color));
+  border-radius: 13px;
+  background:
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--brand-400) 12%, transparent), transparent 62%),
+    color-mix(in srgb, var(--bg-subtle) 72%, var(--bg-card));
 
   &-icon {
     @include flex-center;
@@ -2030,7 +2135,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
     width: 30px;
     height: 30px;
     border-radius: 10px;
-    background: color-mix(in srgb, var(--brand-400) 13%, transparent);
+    background: color-mix(in srgb, var(--brand-400) 14%, transparent);
     color: var(--brand-600);
     font-size: 14px;
   }
@@ -2128,13 +2233,20 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 }
 
 .note-bar {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 10px;
   flex: 0 0 auto;
-  padding: 9px $doc-gutter;
+  // 顶栏贴边：正文有自己的阅读留白，工具栏不必跟着缩进
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-color);
-  background: color-mix(in srgb, var(--bg-card) 92%, var(--bg-subtle));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--bg-card) 97%, var(--brand-50)),
+    color-mix(in srgb, var(--bg-card) 88%, var(--bg-subtle))
+  );
 }
 
 .note-bar__back {
@@ -2163,6 +2275,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   gap: 4px;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
   font-size: 12px;
 }
 
@@ -2170,7 +2283,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   max-width: 140px;
   padding: 4px 6px;
   border: none;
@@ -2260,8 +2373,9 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   gap: 2px;
   flex: 0 0 auto;
   padding: 3px;
-  border-radius: 10px;
-  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--bg-subtle) 80%, transparent);
 }
 
 .mode-switch__item {
@@ -2288,10 +2402,12 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   }
 
   &.is-active {
-    background: var(--brand-500);
-    color: var(--text-inverse);
-    font-weight: 600;
-    box-shadow: 0 4px 10px color-mix(in srgb, var(--brand-500) 28%, transparent);
+    background: var(--bg-card);
+    color: var(--brand-600);
+    font-weight: 650;
+    box-shadow:
+      0 1px 3px rgb(23 74 60 / 10%),
+      0 0 0 1px color-mix(in srgb, var(--brand-400) 22%, transparent);
   }
 }
 
@@ -2301,8 +2417,9 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   gap: 5px;
   margin-right: 4px;
   padding: 3px 9px;
+  border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: var(--bg-subtle);
+  background: color-mix(in srgb, var(--bg-subtle) 70%, transparent);
   color: var(--text-tertiary);
   font-size: 10.5px;
   white-space: nowrap;
@@ -2395,11 +2512,11 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   grid-template-rows: minmax(0, 1fr);
 
   &.has-outline {
-    grid-template-columns: minmax(0, 1fr) 236px;
+    grid-template-columns: minmax(0, 1fr) 242px;
   }
 
   &.has-outline.is-outline-collapsed {
-    grid-template-columns: minmax(0, 1fr) 54px;
+    grid-template-columns: minmax(0, 1fr) 56px;
   }
 
   @include respond-below(lg) {
@@ -2423,37 +2540,138 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 30px $doc-gutter 72px;
+  padding: 34px $doc-gutter 72px;
+  // 顶部一层极淡的品牌色晕染，阅读区从工具栏往下有自然的过渡
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--brand-50) 46%, transparent) 0,
+    transparent 240px
+  );
 
   @include respond-below(md) {
-    padding: 22px 18px 56px;
+    padding: 24px 18px 56px;
   }
 }
 
+// 标题区：栏目 / 目录路径 → 大标题 → 元信息胶囊 → 品牌短线
+.doc-article__head {
+  margin-bottom: 30px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+}
+
+.doc-article__kicker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 11px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.doc-article__module {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-400) 12%, transparent);
+  color: var(--brand-600);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+
+  &::before {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    content: '';
+  }
+
+  &.is-work {
+    background: color-mix(in srgb, var(--c-work) 13%, transparent);
+    color: var(--c-work);
+  }
+
+  &.is-study {
+    background: color-mix(in srgb, var(--c-study) 14%, transparent);
+    color: var(--c-study);
+  }
+
+  &.is-life {
+    background: color-mix(in srgb, var(--c-life) 16%, transparent);
+    color: var(--c-life);
+  }
+}
+
+.doc-article__sep {
+  color: var(--border-strong);
+}
+
+.doc-article__crumb {
+  max-width: 180px;
+  @include ellipsis(1);
+}
+
 .doc-article__title {
+  margin: 0;
   font-family: var(--font-display);
-  font-size: 27px;
+  font-size: 30px;
   font-weight: 700;
-  line-height: 1.35;
-  letter-spacing: -0.01em;
+  line-height: 1.32;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
+  text-wrap: balance;
+
+  @include respond-below(md) {
+    font-size: 24px;
+  }
 }
 
 .doc-article__meta {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0 24px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
+  gap: 7px;
+  margin-top: 14px;
 }
 
-.doc-article__dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--border-strong);
+.doc-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-subtle) 68%, transparent);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  .el-icon {
+    font-size: 12px;
+    color: var(--brand-500);
+  }
+
+  &.is-pinned {
+    border-color: color-mix(in srgb, var(--brand-400) 26%, var(--border-color));
+    color: var(--brand-600);
+
+    .el-icon {
+      color: var(--brand-500);
+    }
+  }
+}
+
+.doc-article__rule {
+  display: block;
+  width: 46px;
+  height: 2px;
+  margin-top: 20px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--brand-400), transparent);
 }
 
 // 正文排版（标题/引用/表格/代码块/高亮）统一在 styles/markdown.scss 的 .markdown-body 里定义
@@ -2467,26 +2685,40 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   font-size: 12.5px;
 }
 
+// 右侧目录：不套卡片，用一条细分隔线与正文并排，阅读时更像书页边注
 .doc-outline {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  margin: 14px 12px 14px 0;
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--bg-subtle) 60%, var(--bg-card));
+  margin: 20px 12px 20px 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--border-color);
   overflow: hidden;
 
   &.is-collapsed {
+    padding-left: 0;
+    align-items: center;
+
     .doc-outline__head {
       flex-direction: column;
-      gap: 8px;
-      padding: 11px 0;
+      gap: 10px;
+      padding: 2px 0 10px;
       border-bottom: none;
     }
 
-    .doc-outline__title .el-icon {
-      font-size: 15px;
+    .doc-outline__title {
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .doc-outline__label {
+      writing-mode: vertical-rl;
+      letter-spacing: 0.22em;
+    }
+
+    .doc-outline__tools {
+      flex-direction: column;
+      gap: 4px;
     }
   }
 
@@ -2501,8 +2733,7 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   justify-content: space-between;
   gap: 8px;
   flex: 0 0 auto;
-  padding: 11px 10px 9px 12px;
-  border-bottom: 1px dashed var(--border-color);
+  padding: 0 2px 10px;
 }
 
 .doc-outline__title {
@@ -2510,17 +2741,37 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--text-primary);
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
   @include ellipsis(1);
 
   .el-icon {
     flex: 0 0 auto;
-    font-size: 14px;
+    font-size: 13px;
     color: var(--brand-500);
   }
+}
+
+.doc-outline__tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.doc-outline__count {
+  min-width: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-400) 11%, transparent);
+  color: var(--brand-600);
+  font-family: var(--font-number);
+  font-size: 10px;
+  line-height: 17px;
+  text-align: center;
 }
 
 .doc-outline__toggle {
@@ -2551,15 +2802,15 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 8px 0;
+  padding: 2px 2px 4px 0;
   @include scrollbar(3px);
 }
 
 .doc-outline__list {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  padding-bottom: 8px;
+  gap: 2px;
+  padding-bottom: 4px;
 }
 
 .doc-outline__item {
@@ -2578,32 +2829,32 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   cursor: pointer;
   transition:
     background $duration-fast $ease-out,
-    color $duration-fast $ease-out;
+    color $duration-fast $ease-out,
+    padding-left $duration-fast $ease-out;
 
   &.is-level-2 {
-    padding-left: 20px;
+    padding-left: 18px;
     font-size: 11.5px;
   }
 
   &.is-level-3 {
-    padding-left: 32px;
+    padding-left: 30px;
     font-size: 11px;
-    color: var(--text-tertiary);
   }
 
   &:hover {
-    background: var(--bg-hover);
+    background: color-mix(in srgb, var(--brand-400) 8%, transparent);
     color: var(--text-primary);
   }
 
   &.is-active {
-    background: var(--brand-50);
-    color: var(--brand-700);
-    font-weight: 600;
+    background: color-mix(in srgb, var(--brand-400) 13%, transparent);
+    color: var(--brand-600);
+    font-weight: 650;
 
     .doc-outline__marker {
       background: var(--brand-500);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 16%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-500) 18%, transparent);
     }
   }
 }
@@ -2614,7 +2865,9 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   height: 5px;
   border-radius: 50%;
   background: var(--border-strong);
-  transition: background $duration-fast $ease-out;
+  transition:
+    background $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
 }
 
 .doc-outline__text {
@@ -2622,15 +2875,25 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   @include ellipsis(1);
 }
 
-.doc-outline__art {
+// 目录底部的轻量动作，不抢正文视线
+.doc-outline__top {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   flex: 0 0 auto;
-  padding: 0 10px 6px;
-  color: var(--brand-500);
+  margin-top: 6px;
+  padding: 7px 0 2px;
+  border: none;
+  border-top: 1px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: color $duration-fast $ease-out;
 
-  svg {
-    display: block;
-    width: 100%;
-    height: auto;
+  &:hover {
+    color: var(--brand-600);
   }
 }
 
@@ -2691,14 +2954,118 @@ $doc-gutter: clamp(20px, 3vw, 44px);
     background: transparent;
   }
 
+  // 编辑工具栏：做成一条独立的圆角「格式条」，不再是从上贯到下的一条灰带
   :deep(.bytemd-toolbar) {
-    padding: 2px 0 8px;
-    border-bottom: none;
-    background: transparent;
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    margin: 6px 0 10px;
+    padding: 5px 7px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg-card) 88%, var(--brand-50)),
+      var(--bg-subtle)
+    );
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 55%),
+      0 1px 2px rgb(23 74 60 / 4%);
+    overflow-x: auto;
+    overflow-y: hidden;
+    @include scrollbar(0);
+  }
+
+  :deep(.bytemd-toolbar-left),
+  :deep(.bytemd-toolbar-right) {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    float: none;
+  }
+
+  :deep(.bytemd-toolbar-right) {
+    margin-left: auto;
+    padding-left: 8px;
+    border-left: 1px dashed var(--border-color);
+  }
+
+  :deep(.bytemd-toolbar-icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    margin: 0;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    transition:
+      background $duration-fast $ease-out,
+      color $duration-fast $ease-out,
+      transform $duration-fast $ease-out;
+
+    svg {
+      width: 20px;
+      height: 20px;
+      padding: 2px;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, var(--brand-400) 13%, transparent);
+      color: var(--brand-700);
+    }
+
+    &:active {
+      transform: scale(0.93);
+    }
+  }
+
+  :deep(.bytemd-toolbar-icon-active) {
+    background: color-mix(in srgb, var(--brand-400) 17%, transparent);
+    color: var(--brand-700);
+  }
+
+  // 单栏模式（窄屏 / 中等宽度）下 ByteMD 用「编辑 / 预览」文字标签切换，
+  // 默认只有内边距，这里做成和页面模式开关一致的胶囊
+  :deep(.bytemd-toolbar-tab) {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 28px;
+    transition:
+      background $duration-fast $ease-out,
+      color $duration-fast $ease-out;
+
+    & + & {
+      margin-left: 2px;
+    }
+
+    &:hover {
+      background: color-mix(in srgb, var(--brand-400) 10%, transparent);
+      color: var(--text-primary);
+    }
+  }
+
+  :deep(.bytemd-toolbar-tab-active) {
+    background: var(--bg-card);
+    color: var(--brand-600);
+    font-weight: 650;
+    box-shadow:
+      0 1px 3px rgb(23 74 60 / 9%),
+      0 0 0 1px color-mix(in srgb, var(--brand-400) 20%, transparent);
   }
 
   :deep(.bytemd-status) {
     display: none;
+  }
+
+  :deep(.bytemd-split .bytemd-preview) {
+    border-left: 1px dashed var(--border-color);
   }
 
   :deep(.bytemd-preview .markdown-body) {
@@ -2793,7 +3160,8 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 .folder-grid {
   display: grid;
   flex: 1;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  // 固定上限 280px：两三个条目时不会被拉成一整行的大色块
+  grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
   align-content: start;
   gap: 12px;
   min-height: 0;
@@ -2805,18 +3173,37 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 16px 16px 14px;
   border: 1px solid var(--border-color);
-  border-radius: $radius-md;
-  background: var(--bg-card);
+  border-radius: 15px;
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--brand-400) 8%, transparent), transparent 62%),
+    var(--bg-card);
   cursor: pointer;
-  transition: border-color $duration-fast, transform $duration-fast, box-shadow $duration-fast;
+  overflow: hidden;
+  transition:
+    border-color $duration-fast $ease-out,
+    transform $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
+
+  // 顶部一条品牌细线，卡片在网格里更容易被识别
+  &::before {
+    position: absolute;
+    top: 0;
+    left: 16px;
+    width: 34px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: linear-gradient(90deg, var(--brand-400), transparent);
+    content: '';
+    opacity: 0.7;
+  }
 
   &:hover {
-    border-color: var(--brand-300, var(--brand-500));
-    box-shadow: var(--shadow-sm);
-    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--brand-400) 42%, var(--border-color));
+    box-shadow: var(--shadow-card);
+    transform: translateY(-2px);
   }
 
   &:hover .folder-card__delete {
@@ -2842,7 +3229,45 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 .folder-card__icon {
   display: inline-flex;
   align-items: center;
-  color: var(--text-tertiary);
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brand-400) 12%, transparent);
+  color: var(--brand-600);
+  font-size: 14px;
+
+  &.is-folder {
+    background: color-mix(in srgb, var(--brand-400) 18%, transparent);
+  }
+}
+
+// 子目录卡片：比文档卡更「导航」，悬停时右侧出现进入提示
+.folder-card.is-subfolder {
+  border-color: color-mix(in srgb, var(--brand-400) 24%, var(--border-color));
+
+  .folder-card__meta {
+    justify-content: space-between;
+  }
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--brand-400) 52%, var(--border-color));
+  }
+}
+
+.folder-card__enter {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  color: var(--brand-600);
+  font-size: 10.5px;
+  opacity: 0;
+  transition: opacity $duration-fast $ease-out;
+
+  .folder-card.is-subfolder:hover & {
+    opacity: 1;
+  }
 }
 
 .folder-card__meta {
@@ -2959,6 +3384,28 @@ $doc-gutter: clamp(20px, 3vw, 44px);
   font-size: 12px;
 }
 
+// ---------- 中等宽度：顶栏只留当前标题，避免面包屑压到右侧工具 ----------
+@include respond-below(lg) {
+  .note-crumb__link,
+  .note-crumb__sep {
+    display: none;
+  }
+
+  .note-crumb__current {
+    font-size: 12.5px;
+  }
+
+  .note-bar__tools {
+    gap: 5px;
+  }
+
+  // 中等宽度优先把空间让给标题：保存状态与按钮文案退成图标
+  .save-chip,
+  .bar-btn__text {
+    display: none;
+  }
+}
+
 // ---------- 窄屏适配（必须写在基础规则之后） ----------
 @include respond-below(md) {
   .note-bar {
@@ -2978,6 +3425,11 @@ $doc-gutter: clamp(20px, 3vw, 44px);
 
   .note-bar__divider,
   .save-chip {
+    display: none;
+  }
+
+  // 窄屏把撤销/重做收起来，否则标题只剩一两个字；编辑器的历史仍可用快捷键
+  .note-bar .icon-btn {
     display: none;
   }
 

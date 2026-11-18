@@ -111,11 +111,11 @@ watch(
 )
 
 onMounted(() => {
+  // 先绑定滚动容器，refresh() 抽完大纲后就能立刻标出当前章节，
+  // 否则页面未滚动时目录整列都是未选中态。
+  scrollHost = host.value ? findScrollHost(host.value) : null
+  scrollHost?.addEventListener('scroll', onScroll, { passive: true })
   void refresh()
-  void nextTick(() => {
-    scrollHost = host.value ? findScrollHost(host.value) : null
-    scrollHost?.addEventListener('scroll', onScroll, { passive: true })
-  })
 })
 
 onBeforeUnmount(() => {

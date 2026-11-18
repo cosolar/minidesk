@@ -27,8 +27,6 @@ interface Row {
   depth: number
   module: NoteModule
   label: string
-  /** 根目录与目录显示子树内的文档总数 */
-  count: number
   folder?: NoteFolder
   note?: NoteOutline
 }
@@ -92,25 +90,6 @@ const notesByBucket = computed(() => {
   return map
 })
 
-/** 每个节点子树内的文档数，一次算完避免模板里递归 */
-const counts = computed(() => {
-  const map = new Map<string, number>()
-  const walk = (key: string, guard: Set<string>): number => {
-    if (guard.has(key)) {
-      return 0
-    }
-    guard.add(key)
-    let total = notesByBucket.value.get(key)?.length ?? 0
-    for (const child of childFolders.value.get(key) ?? []) {
-      total += walk(`folder:${child.id}`, guard)
-    }
-    map.set(key, total)
-    return total
-  }
-  ROOTS.forEach((root) => walk(`root:${root.module}`, new Set<string>()))
-  return map
-})
-
 const rows = computed<Row[]>(() => {
   const list: Row[] = []
   const pushChildren = (parentKey: string, depth: number): void => {
@@ -122,7 +101,6 @@ const rows = computed<Row[]>(() => {
         depth,
         module: folder.module,
         label: folder.name,
-        count: counts.value.get(key) ?? 0,
         folder,
       })
       if (expanded.value.has(key)) {
@@ -136,7 +114,6 @@ const rows = computed<Row[]>(() => {
         depth,
         module: note.module,
         label: note.title || '无标题',
-        count: 0,
         note,
       })
     }
@@ -149,7 +126,6 @@ const rows = computed<Row[]>(() => {
       depth: 0,
       module: root.module,
       label: root.label,
-      count: counts.value.get(key) ?? 0,
     })
     if (expanded.value.has(key)) {
       pushChildren(key, 1)
@@ -330,7 +306,6 @@ function onDragEnd(): void {
         <span v-if="row.kind === 'note' && row.note?.pinned" class="note-tree__pin">
           <el-icon><StarFilled /></el-icon>
         </span>
-        <span v-if="row.kind !== 'note'" class="note-tree__count">{{ row.count }}</span>
 
         <el-dropdown trigger="click" :hide-on-click="true" @command="onRowCommand($event, row)">
           <button type="button" class="note-tree__more" aria-label="更多操作" @click.stop>
@@ -362,33 +337,42 @@ function onDragEnd(): void {
 .note-tree {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   margin: 0;
-  padding: 4px 6px 12px;
+  padding: 4px 2px 12px;
   list-style: none;
 }
 
 .note-tree__item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 32px;
+  min-height: 33px;
   padding-right: 4px;
-  border-radius: $radius-sm;
+  border-radius: 10px;
   color: var(--text-secondary);
   cursor: pointer;
   user-select: none;
-  transition: background $duration-fast, color $duration-fast;
+  transition:
+    background $duration-fast $ease-out,
+    color $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
 
   &:hover {
-    background: var(--bg-hover);
+    background: color-mix(in srgb, var(--brand-400) 7%, transparent);
     color: var(--text-primary);
   }
 
   &.is-active {
-    background: color-mix(in srgb, var(--brand-500) 14%, transparent);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--brand-400) 18%, transparent),
+      color-mix(in srgb, var(--brand-400) 6%, transparent)
+    );
+    box-shadow: inset 2px 0 0 var(--brand-500);
     color: var(--text-primary);
-    font-weight: 600;
+    font-weight: 650;
   }
 
   &.is-drop {
@@ -396,18 +380,60 @@ function onDragEnd(): void {
     box-shadow: inset 0 0 0 1px var(--brand-500);
   }
 
+  // 根节点当作板块标题：图标做成小色块，和下面的目录/文档拉开层级
   &.is-root {
-    margin-top: 6px;
-    font-weight: 600;
+    min-height: 38px;
+    margin-top: 8px;
     color: var(--text-primary);
+    font-weight: 700;
+
+    .note-tree__icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      background: color-mix(in srgb, currentColor 12%, transparent);
+      font-size: 14px;
+    }
+
+    .note-tree__label {
+      font-size: 12.5px;
+      letter-spacing: 0.02em;
+    }
+  }
+
+  &.is-folder {
+    .note-tree__label {
+      font-size: 12.5px;
+    }
   }
 
   &.is-note {
     color: var(--text-secondary);
+    min-height: 31px;
+
+    .note-tree__label {
+      font-size: 12.5px;
+    }
+
+    .note-tree__icon {
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
   }
 
   &.is-note.is-pinned {
     color: var(--text-primary);
+  }
+
+  &.is-note.is-active {
+    color: var(--brand-700);
+
+    .note-tree__icon {
+      color: var(--brand-600);
+    }
   }
 
   &[draggable='true'] {
@@ -448,18 +474,25 @@ function onDragEnd(): void {
 .note-tree__icon {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   color: var(--text-tertiary);
+  font-size: 15px;
 
   .is-work & {
-    color: var(--accent-amber, #d97706);
+    color: var(--c-work);
   }
 
   .is-study & {
-    color: var(--brand-500);
+    color: var(--c-study);
   }
 
   .is-life & {
-    color: var(--accent-rose, #db2777);
+    color: var(--c-life);
+  }
+
+  // 目录沿用板块色，但降低一档饱和度，避免和根节点抢视线
+  .is-folder & {
+    opacity: 0.78;
   }
 }
 
@@ -476,14 +509,6 @@ function onDragEnd(): void {
   display: inline-flex;
   color: var(--brand-500);
   font-size: 11px;
-}
-
-.note-tree__count {
-  min-width: 18px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
 }
 
 .note-tree__more {
