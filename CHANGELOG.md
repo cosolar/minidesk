@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Cover upload crops before it uploads: a reusable `ImageCropDialog` shows the
+  picked image in a square viewport with drag-to-pan, wheel / slider zoom and a
+  reset action, then writes the visible area to a canvas as WebP (longest side
+  ≤ 640px, quality 0.86). A 3000×2000 JPEG drops from 600KB to roughly 36KB.
+  Files that cannot be encoded as WebP fall back to JPEG instead of uploading an
+  empty blob, and small crops are never upscaled.
+- Both panels on the anniversary page can switch between list and card views.
+  Cards show a cover (uploaded photo or a type-tinted emoji tile), type /
+  important / lunar badges, the remaining-day pill, the note and the next date;
+  countdown cards turn into a coloured calendar page. Cards are the default and
+  the choice is remembered per panel in local storage.
+- The profile avatar uses the same cropper: pick, crop, then upload a 512px WebP.
+  The old 2MB pre-check is relaxed to 20MB because the image is re-encoded in the
+  browser before it is sent.
+
 ## [0.5.0] - 2026-11-18
 
 ### Added

@@ -3,23 +3,28 @@ import { computed, reactive, ref } from 'vue'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
+  AlarmClock,
   Calendar,
   Close,
   Collection,
   Delete,
   EditPen,
+  Grid,
+  List,
   Plus,
   Present,
   Star,
   Timer,
   UploadFilled,
 } from '@element-plus/icons-vue'
+import { useStorage } from '@vueuse/core'
 import dayjs from 'dayjs'
 import { Lunar } from 'lunar-javascript'
 import lakeImage from '@/assets/anniversary-lake.webp'
 import jarImage from '@/assets/anniv-jar.webp'
 import calendarImage from '@/assets/anniv-calendar.webp'
 import { uploadFile } from '@/core/http/upload'
+import ImageCropDialog from '@/shared/components/ImageCropDialog.vue'
 import { fileUrl } from '@/core/utils/file'
 import { anniversaryApi, type AnniversaryVO, type CountdownVO } from '../api'
 
@@ -59,6 +64,11 @@ const anniversaries = computed(() => anniversaryQuery.data.value ?? [])
 const countdowns = computed(() => countdownQuery.data.value ?? [])
 
 const activeFilter = ref<FilterKey>('all')
+
+type ViewMode = 'list' | 'grid'
+// 两块各自的列表/卡片偏好，记在本机，下次进来还是上次的样子
+const annivView = useStorage<ViewMode>('minidesk:anniversary-view', 'grid')
+const countdownView = useStorage<ViewMode>('minidesk:countdown-view', 'grid')
 const countdownFormRef = ref<FormInstance>()
 
 // ---------- 派生数据 ----------
@@ -106,6 +116,21 @@ const spotlight = computed(() => {
   return [...ordered.value].sort((a, b) => b.daysLeft - a.daysLeft)[0]
 })
 
+/** 顶部倒数日只取最近一个：未到期优先，全部过期时取最近过的那一个 */
+const nextCountdown = computed(() => {
+  if (!countdowns.value.length) {
+    return null
+  }
+  return [...countdowns.value].sort((a, b) => {
+    const left = a.daysLeft < 0 ? Number.MAX_SAFE_INTEGER : a.daysLeft
+    const right = b.daysLeft < 0 ? Number.MAX_SAFE_INTEGER : b.daysLeft
+    if (left !== right) {
+      return left - right
+    }
+    return a.targetDate.localeCompare(b.targetDate)
+  })[0]
+})
+
 const stats = computed(() => {
   const all = anniversaries.value
   return [
@@ -132,10 +157,18 @@ const stats = computed(() => {
     },
     {
       key: 'upcoming',
-      label: '即将到来',
+      // 明确时间口径，避免「4 个生日却 0 个即将到来」看起来像算错
+      label: '30 天内',
       value: all.filter((item) => item.daysLeft >= 0 && item.daysLeft <= 30).length,
       icon: Timer,
       tone: '#52a99c',
+    },
+    {
+      key: 'countdown',
+      label: '倒数日',
+      value: countdowns.value.length,
+      icon: AlarmClock,
+      tone: '#7b6cf6',
     },
   ]
 })
@@ -262,6 +295,8 @@ const dialogVisible = ref(false)
 const countdownVisible = ref(false)
 const submitting = ref(false)
 const uploading = ref(false)
+const cropVisible = ref(false)
+const cropFile = ref<File | null>(null)
 const editingId = ref<string | null>(null)
 const formRef = ref<FormInstance>()
 const coverInputRef = ref<HTMLInputElement>()
@@ -336,18 +371,34 @@ function pickCover(): void {
   coverInputRef.value?.click()
 }
 
-async function onCoverChange(event: Event): Promise<void> {
+/** 选中文件后先进裁剪弹窗，不直接上传原图 */
+function onCoverChange(event: Event): void {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) {
     return
   }
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+  if (file.size > 20 * 1024 * 1024) {
+    ElMessage.error('图片不能超过 20MB')
+    return
+  }
+  cropFile.value = file
+  cropVisible.value = true
+}
+
+/** 裁剪弹窗确认：拿到已压成 WebP 的小图，再上传 */
+async function onCropConfirm(file: File): Promise<void> {
+  cropFile.value = null
   uploading.value = true
   try {
     const uploaded = await uploadFile(file, 'anniversary')
     form.cover = uploaded.url
-    ElMessage.success('封面已上传')
+    ElMessage.success('封面已更新')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '上传失败')
   } finally {
@@ -469,37 +520,65 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
           <p class="anniv-hero__quote">有你在的日子<br />就是最好的时光</p>
         </header>
 
-        <article v-if="spotlight" class="anniv-spot">
-          <div class="anniv-spot__head">
-            <el-icon><Timer /></el-icon>
-            <span>
-              {{ spotlight.daysLeft >= 0 ? '距离' : '已过去' }}
-              <strong>{{ spotlight.title }}</strong>
-              {{ spotlight.daysLeft >= 0 ? '还有' : '' }}
-            </span>
-            <span class="anniv-spot__type">{{ typeMeta(spotlight.type).label }}</span>
-          </div>
+        <div class="anniv-hero__cards">
+          <article v-if="spotlight" class="anniv-spot">
+            <div class="anniv-spot__head">
+              <el-icon><Timer /></el-icon>
+              <span>
+                {{ spotlight.daysLeft >= 0 ? '距离' : '已过去' }}
+                <strong>{{ spotlight.title }}</strong>
+                {{ spotlight.daysLeft >= 0 ? '还有' : '' }}
+              </span>
+              <span class="anniv-spot__type">{{ typeMeta(spotlight.type).label }}</span>
+            </div>
 
-          <div class="anniv-spot__main">
-            <p class="anniv-spot__num">
-              <strong class="tabular">{{ numberText(spotlight.daysLeft) }}</strong>
-              <span>{{ spotUnit(spotlight.daysLeft) }}</span>
-            </p>
-            <p class="anniv-spot__date">
-              {{ dateText(spotlight.nextDate) }}
-              <span v-if="spotlight.lunarText">· {{ lunarShortText(spotlight.lunarText) }}</span>
-            </p>
-          </div>
+            <div class="anniv-spot__main">
+              <p class="anniv-spot__num">
+                <strong class="tabular">{{ numberText(spotlight.daysLeft) }}</strong>
+                <span>{{ spotUnit(spotlight.daysLeft) }}</span>
+              </p>
+              <p class="anniv-spot__date">
+                {{ dateText(spotlight.nextDate) }}
+                <span v-if="spotlight.lunarText">· {{ lunarShortText(spotlight.lunarText) }}</span>
+              </p>
+            </div>
 
-          <div class="anniv-spot__foot">
-            <span class="anniv-spot__track">
-              <i :style="{ width: `${progress}%` }" />
-            </span>
-            <span class="anniv-spot__hint">一起走过更多的日子 <em>♥</em></span>
-          </div>
-        </article>
+            <div class="anniv-spot__foot">
+              <span class="anniv-spot__track">
+                <i :style="{ width: `${progress}%` }" />
+              </span>
+              <span class="anniv-spot__hint">一起走过更多的日子 <em>♥</em></span>
+            </div>
+          </article>
 
-        <p v-else class="anniv-spot__empty">还没有纪念日，先添加一个值得记住的日子吧</p>
+          <p v-else class="anniv-spot__empty">还没有纪念日，先添加一个值得记住的日子吧</p>
+
+          <article
+            v-if="nextCountdown"
+            class="anniv-hero-count"
+            :style="{ '--tone': nextCountdown.color || '#7b6cf6' }"
+          >
+            <header class="anniv-hero-count__head">
+              <span class="anniv-hero-count__icon">
+                <el-icon><Calendar /></el-icon>
+              </span>
+              <span class="anniv-hero-count__label">倒数日</span>
+            </header>
+
+            <div class="anniv-hero-count__main">
+              <div class="anniv-hero-count__text">
+                <h3>{{ nextCountdown.title }}</h3>
+                <p>{{ dateText(nextCountdown.targetDate) }}</p>
+              </div>
+              <p class="anniv-hero-count__num">
+                <strong class="tabular">{{ numberText(nextCountdown.daysLeft) }}</strong>
+                <span>{{ unitOf(nextCountdown.daysLeft) }}</span>
+              </p>
+            </div>
+
+            <span class="anniv-hero-count__rule" aria-hidden="true" />
+          </article>
+        </div>
       </div>
 
       <span class="anniv-hero__memento" aria-hidden="true">
@@ -508,7 +587,13 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
     </section>
 
     <ul class="anniv-stats">
-      <li v-for="item in stats" :key="item.key" class="anniv-stat" :style="{ '--tone': item.tone }">
+      <li
+        v-for="item in stats"
+        :key="item.key"
+        class="anniv-stat"
+        :class="{ 'is-countdown': item.key === 'countdown' }"
+        :style="{ '--tone': item.tone }"
+      >
         <span class="anniv-stat__icon">
           <el-icon><component :is="item.icon" /></el-icon>
         </span>
@@ -543,6 +628,24 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
               {{ item.label }}
             </button>
           </div>
+          <div class="anniv-viewswitch" role="group" aria-label="显示方式">
+            <button
+              type="button"
+              title="列表"
+              :class="{ 'is-active': annivView === 'list' }"
+              @click="annivView = 'list'"
+            >
+              <el-icon><List /></el-icon>
+            </button>
+            <button
+              type="button"
+              title="卡片"
+              :class="{ 'is-active': annivView === 'grid' }"
+              @click="annivView = 'grid'"
+            >
+              <el-icon><Grid /></el-icon>
+            </button>
+          </div>
           <button type="button" class="anniv-btn is-primary" @click="openDialog()">
             <el-icon><Plus /></el-icon>添加纪念日
           </button>
@@ -551,60 +654,106 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
 
       <el-skeleton v-if="anniversaryQuery.isLoading.value" :rows="3" animated />
 
-      <div v-else-if="visible.length" class="anniv-list">
-        <article
-          v-for="item in visible"
-          :key="item.id"
-          class="anniv-card"
-          :style="{ '--tone': typeMeta(item.type).tone }"
-        >
-          <div class="anniv-card__cover" :style="coverStyle(item.type)">
-            <img v-if="item.cover" :src="coverUrl(item.cover)" alt="" loading="lazy" />
-            <template v-else>
-              <span class="anniv-card__emoji">{{ typeMeta(item.type).emoji }}</span>
-              <span class="anniv-card__ring" aria-hidden="true" />
-            </template>
-          </div>
+      <template v-else-if="visible.length">
+        <div v-if="annivView === 'grid'" class="anniv-tiles">
+          <article
+            v-for="item in visible"
+            :key="item.id"
+            class="anniv-tile"
+            :style="{ '--tone': typeMeta(item.type).tone }"
+          >
+            <div class="anniv-tile__cover" :style="item.cover ? undefined : coverStyle(item.type)">
+              <img v-if="item.cover" :src="coverUrl(item.cover)" alt="" loading="lazy" />
+              <span v-else class="anniv-tile__emoji">{{ typeMeta(item.type).emoji }}</span>
 
-          <div class="anniv-card__body">
-            <div class="anniv-card__title-row">
-              <span class="anniv-card__accent" aria-hidden="true" />
-              <h3>{{ item.title }}</h3>
-              <div class="anniv-card__tags">
+              <div class="anniv-tile__badges">
                 <span class="anniv-tag is-type">{{ typeMeta(item.type).label }}</span>
                 <span v-if="item.important" class="anniv-tag is-important">♥ 重要</span>
                 <span v-if="item.lunar" class="anniv-tag is-lunar">农历</span>
               </div>
+
+              <div class="anniv-tile__actions">
+                <button type="button" class="anniv-icon-btn" title="编辑" @click.stop="openDialog(item)">
+                  <el-icon><EditPen /></el-icon>
+                </button>
+                <button type="button" class="anniv-icon-btn is-danger" title="删除" @click.stop="remove(item)">
+                  <el-icon><Delete /></el-icon>
+                </button>
+              </div>
+
+              <p class="anniv-tile__days">
+                <strong class="tabular">{{ numberText(item.daysLeft) }}</strong>
+                <span>{{ unitOf(item.daysLeft) }}</span>
+              </p>
             </div>
-            <p class="anniv-card__note" :class="{ 'is-placeholder': !item.note }">
-              {{ item.note || '还没有备注，点右侧编辑补上一句话' }}
-            </p>
-            <p class="anniv-card__meta">
-              <span v-if="item.person">{{ item.person }}</span>
-              <span v-if="item.lunarText">{{ lunarShortText(item.lunarText) }}</span>
-              <span>{{ item.repeatYearly ? '每年重复' : '仅此一次' }}</span>
-            </p>
-          </div>
 
-          <div class="anniv-card__side">
-            <p class="anniv-card__num">
-              <strong class="tabular">{{ numberText(item.daysLeft) }}</strong>
-              <span>{{ unitOf(item.daysLeft) }}</span>
-            </p>
-            <p class="anniv-card__date">{{ dateText(item.nextDate) }}</p>
-          </div>
+            <div class="anniv-tile__body">
+              <h3>{{ item.title }}</h3>
+              <p class="anniv-tile__note" :class="{ 'is-placeholder': !item.note }">
+                {{ item.note || '还没有备注，点右上角编辑补一句' }}
+              </p>
+              <div class="anniv-tile__foot">
+                <span>{{ dateText(item.nextDate) }}</span>
+                <span v-if="item.person">{{ item.person }}</span>
+              </div>
+            </div>
+          </article>
+        </div>
 
-          <div class="anniv-card__actions">
-            <button type="button" class="anniv-icon-btn" title="编辑" @click="openDialog(item)">
-              <el-icon><EditPen /></el-icon>
-            </button>
-            <button type="button" class="anniv-icon-btn is-danger" title="删除" @click="remove(item)">
-              <el-icon><Delete /></el-icon>
-            </button>
-          </div>
-        </article>
-      </div>
+        <div v-else class="anniv-list">
+          <article
+            v-for="item in visible"
+            :key="item.id"
+            class="anniv-card"
+            :style="{ '--tone': typeMeta(item.type).tone }"
+          >
+            <div class="anniv-card__cover" :style="coverStyle(item.type)">
+              <img v-if="item.cover" :src="coverUrl(item.cover)" alt="" loading="lazy" />
+              <template v-else>
+                <span class="anniv-card__emoji">{{ typeMeta(item.type).emoji }}</span>
+                <span class="anniv-card__ring" aria-hidden="true" />
+              </template>
+            </div>
 
+            <div class="anniv-card__body">
+              <div class="anniv-card__title-row">
+                <span class="anniv-card__accent" aria-hidden="true" />
+                <h3>{{ item.title }}</h3>
+                <div class="anniv-card__tags">
+                  <span class="anniv-tag is-type">{{ typeMeta(item.type).label }}</span>
+                  <span v-if="item.important" class="anniv-tag is-important">♥ 重要</span>
+                  <span v-if="item.lunar" class="anniv-tag is-lunar">农历</span>
+                </div>
+              </div>
+              <p class="anniv-card__note" :class="{ 'is-placeholder': !item.note }">
+                {{ item.note || '还没有备注，点右侧编辑补上一句话' }}
+              </p>
+              <p class="anniv-card__meta">
+                <span v-if="item.person">{{ item.person }}</span>
+                <span v-if="item.lunarText">{{ lunarShortText(item.lunarText) }}</span>
+                <span>{{ item.repeatYearly ? '每年重复' : '仅此一次' }}</span>
+              </p>
+            </div>
+
+            <div class="anniv-card__side">
+              <p class="anniv-card__num">
+                <strong class="tabular">{{ numberText(item.daysLeft) }}</strong>
+                <span>{{ unitOf(item.daysLeft) }}</span>
+              </p>
+              <p class="anniv-card__date">{{ dateText(item.nextDate) }}</p>
+            </div>
+
+            <div class="anniv-card__actions">
+              <button type="button" class="anniv-icon-btn" title="编辑" @click="openDialog(item)">
+                <el-icon><EditPen /></el-icon>
+              </button>
+              <button type="button" class="anniv-icon-btn is-danger" title="删除" @click="remove(item)">
+                <el-icon><Delete /></el-icon>
+              </button>
+            </div>
+          </article>
+        </div>
+      </template>
       <div v-else class="anniv-empty">
         <span class="anniv-empty__art">{{ activeFilter === 'all' ? '🌼' : '🔍' }}</span>
         <h3>{{ activeFilter === 'all' ? '还没有纪念日' : '这个筛选下暂时没有内容' }}</h3>
@@ -624,12 +773,57 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
           <h2>倒数日</h2>
           <span class="anniv-panel__count">{{ countdowns.length }} 个</span>
         </div>
-        <button type="button" class="anniv-btn" @click="openCountdownDialog">
-          <el-icon><Plus /></el-icon>加倒数日
-        </button>
+        <div class="anniv-panel__tools">
+          <div class="anniv-viewswitch" role="group" aria-label="显示方式">
+            <button
+              type="button"
+              title="列表"
+              :class="{ 'is-active': countdownView === 'list' }"
+              @click="countdownView = 'list'"
+            >
+              <el-icon><List /></el-icon>
+            </button>
+            <button
+              type="button"
+              title="卡片"
+              :class="{ 'is-active': countdownView === 'grid' }"
+              @click="countdownView = 'grid'"
+            >
+              <el-icon><Grid /></el-icon>
+            </button>
+          </div>
+          <button type="button" class="anniv-btn" @click="openCountdownDialog">
+            <el-icon><Plus /></el-icon>加倒数日
+          </button>
+        </div>
       </header>
 
-      <div class="countdown-layout">
+      <div v-if="countdownView === 'grid' && countdowns.length" class="countdown-tiles">
+        <article
+          v-for="item in countdowns"
+          :key="item.id"
+          class="countdown-tile"
+          :style="{ '--tone': item.color || '#7b6cf6' }"
+        >
+          <div class="countdown-tile__cover">
+            <span class="countdown-tile__month">{{ monthText(item.targetDate) }}</span>
+            <strong class="countdown-tile__day tabular">{{ dayText(item.targetDate) }}</strong>
+            <span class="countdown-tile__week">{{ weekdayText(item.targetDate) }}</span>
+            <button type="button" class="countdown-tile__del" title="删除" @click="removeCountdown(item)">
+              <el-icon><Delete /></el-icon>
+            </button>
+          </div>
+          <div class="countdown-tile__body">
+            <h3>{{ item.title }}</h3>
+            <p class="countdown-tile__left">
+              {{ countdownLabel(item.daysLeft) }}
+              <strong class="tabular">{{ numberText(item.daysLeft) }}</strong> 天
+            </p>
+          </div>
+        </article>
+      </div>
+
+      <div v-else class="countdown-layout">
         <aside class="countdown-art">
           <div class="countdown-art__frame">
             <img :src="calendarImage" alt="倒数日插画" loading="lazy" />
@@ -696,7 +890,7 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
           </button>
           <div class="anniv-form-cover__text">
             <strong>封面</strong>
-            <p>建议方形图片；不传则按类型生成柔和底纹。</p>
+            <p>上传后可拖动裁剪，自动压缩为 WebP；不传则按类型生成柔和底纹。</p>
             <button v-if="form.cover" type="button" class="anniv-text-btn" @click="form.cover = ''">
               <el-icon><Close /></el-icon>移除封面
             </button>
@@ -761,6 +955,14 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
         <el-button type="primary" :loading="submitting" @click="submit">保存</el-button>
       </template>
     </el-dialog>
+
+    <ImageCropDialog
+      v-model="cropVisible"
+      :file="cropFile"
+      title="裁剪封面"
+      :output-size="640"
+      @confirm="onCropConfirm"
+    />
 
     <el-dialog v-model="countdownVisible" title="添加倒数日" width="420px" append-to-body>
       <el-form ref="countdownFormRef" :model="countdownForm" :rules="countdownRules" label-position="top">
@@ -963,8 +1165,18 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
   text-shadow: 0 2px 18px rgba(255, 255, 255, 0.7);
 }
 
+// 焦点卡 + 最近的倒数日并排；右侧给玻璃罐留出 176px
+.anniv-hero__cards {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  max-width: calc(100% - 176px);
+}
+
 // ---------- 焦点卡 ----------
 .anniv-spot {
+  flex: 0 1 470px;
   align-self: flex-start;
   width: min(470px, 100%);
   padding: 15px 20px 14px;
@@ -1091,12 +1303,116 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
   backdrop-filter: blur(12px);
 }
 
+// ---------- 最近的倒数日（英雄区第二张卡） ----------
+.anniv-hero-count {
+  --tone: #7b6cf6;
+  display: flex;
+  flex: 1 1 260px;
+  flex-direction: column;
+  gap: 12px;
+  align-self: flex-start;
+  max-width: 330px;
+  // 和左侧焦点卡同高，底部对齐，避免压到下面的统计条
+  min-height: 135px;
+  padding: 15px 18px 14px;
+  border: 1px solid color-mix(in srgb, #fff 54%, transparent);
+  border-radius: 20px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface-glass-strong) 94%, transparent),
+    color-mix(in srgb, var(--tone) 13%, var(--surface-glass-strong))
+  );
+  box-shadow: 0 18px 40px rgba(24, 60, 120, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+
+.anniv-hero-count__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.anniv-hero-count__icon {
+  @include flex-center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--tone) 16%, transparent);
+  color: color-mix(in srgb, var(--tone) 76%, var(--text-primary));
+  font-size: 13px;
+}
+
+.anniv-hero-count__label {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+}
+
+.anniv-hero-count__main {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.anniv-hero-count__text {
+  min-width: 0;
+
+  h3 {
+    overflow: hidden;
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 1.3;
+    color: var(--text-primary);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  p {
+    margin-top: 5px;
+    font-size: 11px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+  }
+}
+
+.anniv-hero-count__num {
+  display: inline-flex;
+  align-items: baseline;
+  flex: 0 0 auto;
+  gap: 3px;
+
+  strong {
+    font-family: var(--font-number);
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1;
+    color: color-mix(in srgb, var(--tone) 68%, var(--text-primary));
+    font-variant-numeric: tabular-nums;
+  }
+
+  span {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+}
+
+.anniv-hero-count__rule {
+  width: 40px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--tone), transparent);
+}
+
 // ---------- 统计条 ----------
 .anniv-stats {
   position: relative;
   z-index: 3;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   margin: -34px 18px 0;
   padding: 13px 18px;
@@ -1125,6 +1441,20 @@ async function removeCountdown(item: CountdownVO): Promise<void> {
 
   &:hover {
     background: color-mix(in srgb, var(--brand-50) 60%, transparent);
+  }
+
+  // 倒数日与纪念日不是同一类数据，用稍强的分隔线和淡紫底提示这是另一组
+  &.is-countdown {
+    border-left-color: color-mix(in srgb, #7b6cf6 34%, var(--border-color));
+    background: color-mix(in srgb, #7b6cf6 5%, transparent);
+
+    &:hover {
+      background: color-mix(in srgb, #7b6cf6 11%, transparent);
+    }
+
+    .anniv-stat__text span {
+      color: color-mix(in srgb, #7b6cf6 52%, var(--text-tertiary));
+    }
   }
 }
 
@@ -1988,6 +2318,308 @@ html[data-theme='dark'] {
   }
 }
 
+// ---------- 视图切换 ----------
+.anniv-viewswitch {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--bg-subtle);
+
+  button {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-tertiary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: color $duration-fast $ease-out, background $duration-fast $ease-out;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &.is-active {
+      color: var(--brand-600);
+      background: var(--bg-card);
+      box-shadow: 0 2px 8px rgba(24, 60, 120, 0.1);
+    }
+  }
+}
+
+// ---------- 纪念日：卡片视图 ----------
+.anniv-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: 14px;
+}
+
+.anniv-tile {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--border-color) 84%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+  box-shadow: var(--shadow-card);
+  transition: transform $duration-base $ease-out, box-shadow $duration-base $ease-out,
+    border-color $duration-base $ease-out;
+
+  &:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--tone) 34%, var(--border-color));
+    box-shadow: 0 18px 34px rgba(24, 60, 120, 0.12);
+  }
+
+  &:hover .anniv-tile__actions {
+    opacity: 1;
+  }
+}
+
+.anniv-tile__cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+
+  > img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.anniv-tile__emoji {
+  font-size: 42px;
+  filter: drop-shadow(0 6px 12px rgba(20, 40, 80, 0.16));
+}
+
+.anniv-tile__badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  gap: 5px;
+
+  .anniv-tag {
+    background: rgba(255, 255, 255, 0.88);
+    box-shadow: 0 2px 8px rgba(20, 50, 90, 0.1);
+    backdrop-filter: blur(8px);
+  }
+}
+
+.anniv-tile__actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+  opacity: 0.86;
+  transition: opacity $duration-fast $ease-out;
+
+  .anniv-icon-btn {
+    border-color: transparent;
+    background: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 2px 8px rgba(20, 50, 90, 0.12);
+    backdrop-filter: blur(8px);
+  }
+}
+
+.anniv-tile__days {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 4px 10px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 16px rgba(20, 50, 90, 0.14);
+  backdrop-filter: blur(8px);
+
+  strong {
+    font-family: var(--font-number);
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 1;
+    color: color-mix(in srgb, var(--tone) 82%, var(--text-primary));
+  }
+
+  span {
+    font-size: 9.5px;
+    color: var(--text-secondary);
+  }
+}
+
+.anniv-tile__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  padding: 11px 14px 13px;
+
+  h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    @include ellipsis;
+  }
+}
+
+.anniv-tile__note {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  @include ellipsis(2);
+
+  &.is-placeholder {
+    color: var(--text-tertiary);
+    opacity: 0.82;
+  }
+}
+
+.anniv-tile__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+// ---------- 倒数日：卡片视图 ----------
+.countdown-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: 12px;
+}
+
+.countdown-tile {
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--tone) 18%, var(--border-color));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+  transition: transform $duration-base $ease-out, box-shadow $duration-base $ease-out,
+    border-color $duration-base $ease-out;
+
+  &:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--tone) 40%, var(--border-color));
+    box-shadow: 0 16px 30px color-mix(in srgb, var(--tone) 18%, transparent);
+  }
+
+  &:hover .countdown-tile__del {
+    background: rgba(255, 255, 255, 0.34);
+  }
+}
+
+.countdown-tile__cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  height: 106px;
+  color: #fff;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 70%, #fff), var(--tone));
+
+  // 顶部柔光 + 三个线圈，呼应台历插画
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: 52%;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent);
+    pointer-events: none;
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    width: 24px;
+    height: 3px;
+    border-radius: 999px;
+    background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.82) 0 3px, transparent 3px 8px);
+    transform: translateX(-50%);
+  }
+}
+
+.countdown-tile__month {
+  position: relative;
+  font-size: 9.5px;
+  letter-spacing: 0.5px;
+  opacity: 0.92;
+}
+
+.countdown-tile__day {
+  position: relative;
+  font-family: var(--font-number);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.02;
+  letter-spacing: -1px;
+}
+
+.countdown-tile__week {
+  position: relative;
+  font-size: 9px;
+  opacity: 0.86;
+}
+
+.countdown-tile__del {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background $duration-fast $ease-out;
+}
+
+.countdown-tile__body {
+  padding: 10px 12px 12px;
+
+  h3 {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    @include ellipsis;
+  }
+}
+
+.countdown-tile__left {
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+
+  strong {
+    font-family: var(--font-number);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--tone);
+  }
+}
+
 // ---------- 响应式 ----------
 @include respond-below(lg) {
   .anniv-hero {
@@ -2002,6 +2634,15 @@ html[data-theme='dark'] {
   .anniv-hero__quote,
   .anniv-hero__memento {
     display: none;
+  }
+
+  // 玻璃罐收起后不再需要给右侧留位
+  .anniv-hero__cards {
+    max-width: 100%;
+  }
+
+  .anniv-hero-count {
+    flex-basis: 300px;
   }
 
   // 插画改成横向条，避免占掉一半宽度
@@ -2053,10 +2694,27 @@ html[data-theme='dark'] {
 }
 
 @include respond-below(md) {
+  // 中等宽度放不下两张卡，倒数日只在下方列表展示
+  .anniv-hero-count {
+    display: none;
+  }
+
   .anniv-stats {
+    // 5 项挤在一行会把「全部纪念日」截断，这里改成 3 列两行
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     margin: -30px 10px 0;
     padding: 10px 12px;
     gap: 2px;
+  }
+
+  // 第二行从第 4 项开始，左侧不需要分隔线；第 5 项占两格
+  .anniv-stat:nth-child(4) {
+    border-left: none;
+  }
+
+  .anniv-stat:last-child {
+    grid-column: span 2;
+    justify-content: center;
   }
 
   .anniv-stat__icon {
@@ -2101,6 +2759,16 @@ html[data-theme='dark'] {
     display: none;
   }
 
+  .anniv-tiles {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .countdown-tiles {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 10px;
+  }
+
   .anniv-hero__brand h1 {
     font-size: 23px;
   }
@@ -2131,6 +2799,13 @@ html[data-theme='dark'] {
     margin: -26px 8px 0;
     gap: 6px 0;
     padding: 10px 8px;
+  }
+
+  // 5 项在双列里会剩最后一项，让它占满整行，避免右半边空着
+  .anniv-stat:last-child:nth-child(odd) {
+    grid-column: span 2;
+    justify-content: center;
+    border-left: none;
   }
 
   .anniv-stat {

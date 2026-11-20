@@ -5,6 +5,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Camera, Key, Lock, Message, User } from '@element-plus/icons-vue'
 import { useUserStore } from '@/core/stores/user'
 import { fileUrl } from '@/core/utils/file'
+import ImageCropDialog from '@/shared/components/ImageCropDialog.vue'
 import { profileApi, type PasswordPayload, type ProfilePayload } from '../api'
 
 const userStore = useUserStore()
@@ -36,6 +37,8 @@ const passwords = reactive({
 })
 const uploading = ref(false)
 const fileInput = ref<HTMLInputElement>()
+const cropVisible = ref(false)
+const cropFile = ref<File | null>(null)
 
 // 资料加载后回填一次，之后不再覆盖用户正在输入的内容
 watch(
@@ -115,17 +118,28 @@ function pickAvatar(): void {
   fileInput.value?.click()
 }
 
-async function onAvatarChange(event: Event): Promise<void> {
+/** 选中图片后先进裁剪弹窗，确认时拿到的已经是压好的 WebP */
+function onAvatarChange(event: Event): void {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
   if (!file) {
     return
   }
-  if (file.size > 2 * 1024 * 1024) {
-    ElMessage.warning('头像请控制在 2MB 以内')
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
     return
   }
+  if (file.size > 20 * 1024 * 1024) {
+    ElMessage.warning('图片不能超过 20MB')
+    return
+  }
+  cropFile.value = file
+  cropVisible.value = true
+}
+
+async function onAvatarConfirm(file: File): Promise<void> {
+  cropFile.value = null
   uploading.value = true
   try {
     const data = await profileApi.uploadAvatar(file)
@@ -164,9 +178,18 @@ async function onAvatarChange(event: Event): Promise<void> {
           <input
             ref="fileInput"
             type="file"
-            accept=".jpg,.jpeg,.png,.webp"
+            accept="image/*"
             class="profile-avatar__input"
             @change="onAvatarChange"
+          />
+          <p class="profile-avatar__hint">点一下换头像 · 可裁剪、自动压缩</p>
+
+          <ImageCropDialog
+            v-model="cropVisible"
+            :file="cropFile"
+            title="裁剪头像"
+            :output-size="512"
+            @confirm="onAvatarConfirm"
           />
 
           <h2 class="profile-name">{{ profile?.nickname || profile?.username }}</h2>
@@ -323,11 +346,17 @@ async function onAvatarChange(event: Event): Promise<void> {
   display: none;
 }
 
+.profile-avatar__hint {
+  margin-top: 8px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+
 .profile-name {
-  margin-top: 14px;
+  margin-top: 12px;
   font-size: 17px;
   font-weight: 700;
-  color: #22383c;
+  color: var(--text-primary);
 }
 
 .profile-account {
